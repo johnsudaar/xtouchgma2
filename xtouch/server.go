@@ -18,12 +18,15 @@ type Server struct {
 	conn       *net.UDPConn
 	client     *net.UDPAddr
 	socketLock *sync.Mutex
+	stop       bool
+	stopLock   *sync.Mutex
 }
 
 func NewServer(port int) *Server {
 	return &Server{
 		Port:       port,
 		socketLock: &sync.Mutex{},
+		stopLock:   &sync.Mutex{},
 	}
 }
 
@@ -36,46 +39,81 @@ func (s *Server) Start(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrapf(err, "fail to listen on 0.0.0.0:%v", s.Port)
 	}
-	defer conn.Close()
 
 	s.conn = conn
 
 	go func() {
 		for {
+			s.stopLock.Lock()
+			stop := s.stop
+			s.stopLock.Unlock()
+			if stop {
+				return
+			}
 			time.Sleep(6 * time.Second)
 			s.keepAlive(ctx)
 		}
 	}()
 
-	buffer := make([]byte, 1024)
+	go func() {
+		buffer := make([]byte, 1024)
+		for {
+			s.stopLock.Lock()
+			stop := s.stop
+			s.stopLock.Unlock()
+			if stop {
+				return
+			}
+			sendKeepalive := false
+			n, from, err := conn.ReadFromUDP(buffer)
+			if err != nil {
+				log.WithError(err).Error("fail to read udp buffer")
+				continue
+			}
+			s.socketLock.Lock()
+			if s.client == nil {
+				sendKeepalive = true
+			}
+			s.client = from
+			s.socketLock.Unlock()
+
+			if sendKeepalive {
+				s.keepAlive(ctx)
+			}
+
+			packet := buffer[:n]
+
+			log.WithField("from", from).Debug(hex.Dump(packet))
+			if buffer[0] < 0xf0 {
+				var midiMessage MidiMessage
+				midiMessage.UnmarshalBinary(buffer)
+				fmt.Printf("%+v\n", midiMessage)
+			}
+		}
+	}()
+
+	now := time.Now()
 	for {
-		sendKeepalive := false
-		n, from, err := conn.ReadFromUDP(buffer)
-		if err != nil {
-			return errors.Wrap(err, "fail to read udp buffer")
+		if time.Since(now) > 10*time.Second {
+			return fmt.Errorf("fail to connect: timeout")
 		}
 		s.socketLock.Lock()
-		if s.client == nil {
-			sendKeepalive = true
-		}
-		s.client = from
+		client := s.client
 		s.socketLock.Unlock()
-
-		if sendKeepalive {
-			s.keepAlive(ctx)
+		if client != nil {
+			return nil
 		}
-
-		packet := buffer[:n]
-
-		log.WithField("from", from).Debug(hex.Dump(packet))
-		if buffer[0] < 0xf0 {
-			var midiMessage MidiMessage
-			midiMessage.UnmarshalBinary(buffer)
-			fmt.Printf("%+v\n", midiMessage)
-		}
+		time.Sleep(100 * time.Millisecond)
 	}
+}
 
-	return nil
+func (s *Server) Stop() {
+	if s.conn != nil {
+		s.conn.Close()
+	}
+	s.stopLock.Lock()
+	s.stop = true
+	s.socketLock.Unlock()
 }
 
 func (s *Server) keepAlive(ctx context.Context) {
