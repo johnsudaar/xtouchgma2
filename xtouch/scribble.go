@@ -2,13 +2,16 @@ package xtouch
 
 import (
 	"bytes"
+	"context"
 
 	"github.com/pkg/errors"
 )
 
 type ScribbleColor byte
 
+// 3bits : red, green, blue
 const (
+	ScribbleColorBlack  ScribbleColor = 0x0
 	ScribbleColorRed    ScribbleColor = 0x01
 	ScribbleColorGreen  ScribbleColor = 0x02
 	ScribbleColorYellow ScribbleColor = 0x03
@@ -18,7 +21,7 @@ const (
 	ScribbleColorWhite  ScribbleColor = 0x07
 )
 
-func (s *Server) SetScribble(channel int, color ScribbleColor, secondLineInverted bool, line1 string, line2 string) error {
+func (s *Server) SetScribble(ctx context.Context, channel int, color ScribbleColor, secondLineInverted bool, line1 string, line2 string) error {
 	if len(line1) > 7 {
 		line1 = line1[:7]
 	}
@@ -37,7 +40,7 @@ func (s *Server) SetScribble(channel int, color ScribbleColor, secondLineInverte
 	buff.Write(toExactly7Char(line1))
 	buff.Write(toExactly7Char(line2))
 
-	err := s.SendSysExPacket(buff.Bytes())
+	err := s.SendSysExPacket(ctx, buff.Bytes())
 	if err != nil {
 		return errors.Wrap(err, "fail to send scribble packet")
 	}

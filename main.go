@@ -2,18 +2,29 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"math"
+	"strings"
 	"time"
 
 	"github.com/Scalingo/go-utils/logger"
-	"github.com/gdamore/tcell"
 	"github.com/johnsudaar/xtouchgma2/gma2ws"
-	"github.com/rivo/tview"
+	"github.com/johnsudaar/xtouchgma2/xtouch"
 )
 
 func main() {
+
 	log := logger.Default()
 	ctx := logger.ToCtx(context.Background(), log)
+	xtouch.ClosestScribbleColor("")
+	server1 := xtouch.NewServer(10111)
+	go func() {
+		panic(server1.Start(ctx))
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	//Vegas(ctx, server1)
+
 	c, err := gma2ws.NewClient("192.168.1.21", "john", "john")
 	if err != nil {
 		panic(err)
@@ -25,110 +36,104 @@ func main() {
 	}
 	defer stop()
 
-	app := tview.NewApplication()
-	grid := tview.NewGrid()
-	app.SetRoot(grid, true)
-	go app.Run()
+	time.Sleep(3 * time.Second)
 
+	log.Info("Start")
 	for {
+		time.Sleep(100 * time.Millisecond)
 		playbacks, err := c.Playbacks(0, []gma2ws.PlaybacksRange{
 			gma2ws.PlaybacksRange{
 				Index: 0,
-				Count: 5,
+				Count: 10,
 			},
 		})
 		if err != nil {
-			log.WithError(err).Error("Error while refreshing playbacks")
+			panic(err)
 		}
-		grid.Clear()
 
-		for i, executor := range playbacks[0].Items[0] {
-			box := CreateBoxForExecutor(executor)
-			grid.AddItem(box, 0, i, 1, 1, 0, 0, true)
+		for i := 0; i < 8; i++ {
+			executor := playbacks[0].Items[i/5][i%5]
+			f := executor.ExecutorBlocks[0].Fader
+			if f.Max == 0 {
+				server1.SetFaderPos(ctx, i, 0)
+			} else {
+				value := float64(f.Value) / float64(f.Max-f.Min)
+				if value > 1 {
+					value = 1
+				}
+				server1.SetFaderPos(ctx, i, value)
+			}
+			line1 := executor.TextTop.Text
+			line2 := ""
+			if len(executor.Cues.Items) == 3 {
+				line2 = strings.TrimSpace(executor.Cues.Items[1].Text)
+			} else if len(executor.Cues.Items) >= 1 {
+				line2 = strings.TrimSpace(executor.Cues.Items[0].Text)
+			}
+			color, err := xtouch.ClosestScribbleColor(f.BorderColor)
+			if err != nil {
+				panic(err)
+			}
+			server1.SetScribble(ctx, i, color, true, line1, line2)
 		}
-		app.Draw()
-		time.Sleep(100 * time.Millisecond)
 	}
 }
 
-func CreateBoxForExecutor(executor gma2ws.ServerPlayback) *tview.Grid {
-	grid := tview.NewGrid().SetRows(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-
-	// HEADER
-	headerGrid := tview.NewGrid().SetColumns(0, 0, 0).SetRows(0, 0, 0)
-	headerGrid.AddItem(TextViewFromTextItem(
-		executor.Index, executor.HeaderBackgroundColor, tview.AlignLeft),
-		0, 0, 1, 1, 0, 0, true)
-	headerGrid.AddItem(
-		TextViewFromTextItem(executor.ObjectType, executor.HeaderBackgroundColor, tview.AlignCenter),
-		0, 1, 1, 1, 0, 0, true)
-	headerGrid.AddItem(
-		TextViewFromTextItem(executor.ObjectIndex, executor.HeaderBackgroundColor, tview.AlignRight),
-		0, 2, 1, 1, 0, 0, true)
-	headerGrid.AddItem(
-		TextViewFromTextItem(executor.TextTop, executor.HeaderBackgroundColor, tview.AlignLeft),
-		1, 0, 2, 3, 0, 0, true)
-	headerGrid.SetBorder(true)
-	headerGrid.SetBorderColor(tcell.GetColor(executor.HeaderBorderColor))
-	grid.AddItem(headerGrid, 0, 0, 2, 1, 0, 0, true)
-
-	// Cues
-	cuesGrid := tview.NewGrid()
-	for i, cue := range executor.Cues.Items {
-		cuesGrid.AddItem(
-			TextViewFromTextItem(cue, executor.Cues.BackgroundColor, tview.AlignCenter),
-			i, 0, 1, 1, 0, 0, true,
-		)
-	}
-	grid.AddItem(cuesGrid, 2, 0, 3, 1, 0, 0, true)
-
-	// Buttons
-	b3 := executor.ExecutorBlocks[0].Button3
-	button3 := tview.NewButton(b3.Text)
-	button3.SetBackgroundColor(tcell.GetColor(b3.Color))
-	button3.SetBorder(true).SetBorderColor(tcell.GetColor(b3.BorderColor))
-	grid.AddItem(button3, 5, 0, 2, 1, 0, 0, true)
-	b2 := executor.ExecutorBlocks[0].Button2
-	button2 := tview.NewButton(b2.Text)
-	button2.SetBackgroundColor(tcell.GetColor(b2.Color))
-	button2.SetBorder(true).SetBorderColor(tcell.GetColor(b2.BorderColor))
-	grid.AddItem(button2, 7, 0, 2, 1, 0, 0, true)
-	b1 := executor.ExecutorBlocks[0].Button1
-	button1 := tview.NewButton(b1.Text)
-	button1.SetBackgroundColor(tcell.GetColor(b1.Color))
-	button1.SetBorder(true).SetBorderColor(tcell.GetColor(b1.BorderColor))
-	grid.AddItem(button1, 18, 0, 2, 1, 0, 0, true)
-
-	f := executor.ExecutorBlocks[0].Fader
-	for i := 0; i < 9; i++ {
-		fader := tview.NewTextView()
-		lowThreshold := (f.Max - f.Min) / float64(9) * float64(i)
-		highThreshold := (f.Max - f.Min) / float64(9) * float64(i+1)
-		if (f.Value >= lowThreshold && f.Value <= highThreshold && f.Max != 0) || (f.Max == 0 && i == 0) {
-			fader.SetText(fmt.Sprintf("%s - %s", f.TypeText, f.ValueText))
-			fader.SetTextAlign(tview.AlignCenter)
-			fader.SetBackgroundColor(tcell.GetColor(f.Color))
-			fader.SetBorder(true).SetBorderColor(tcell.GetColor(f.BorderColor))
-		} else {
-			fader.SetText("|")
-			fader.SetTextColor(tcell.GetColor(f.BorderColor))
-			fader.SetTextAlign(tview.AlignCenter)
+func Vegas(ctx context.Context, server1 *xtouch.Server) {
+	go func() {
+		var t float64 = 0.01
+		x := 0
+		for {
+			for i := 0; i < 9; i++ {
+				res := math.Sin(t+float64(i)/2)/2 + 0.5
+				server1.SetFaderPos(ctx, i, res)
+				if i != 8 {
+					server1.SetRingPosition(ctx, i, res)
+				}
+				if i == x {
+					server1.SetScribble(ctx, i, xtouch.ScribbleColorRed, false, "A", "B")
+				} else {
+					server1.SetScribble(ctx, i, xtouch.ScribbleColorBlack, false, "A", "B")
+				}
+			}
+			x++
+			if x == 8 {
+				x = 0
+			}
+			t += 0.03
+			time.Sleep(50 * time.Millisecond)
 		}
-		grid.AddItem(fader, 17-i, 0, 1, 1, 0, 0, true)
-	}
+	}()
 
-	return grid
-}
+	for {
+		for i := 0; i < 8; i++ {
+			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionSelect, xtouch.ButtonStatusOn)
+			time.Sleep(25 * time.Millisecond)
+			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionMute, xtouch.ButtonStatusOn)
+			time.Sleep(25 * time.Millisecond)
+			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionSolo, xtouch.ButtonStatusOn)
+			time.Sleep(25 * time.Millisecond)
+			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionRec, xtouch.ButtonStatusOn)
+			time.Sleep(25 * time.Millisecond)
+		}
+		for button, _ := range xtouch.ButtonToNote {
+			server1.SetButtonStatus(ctx, button, xtouch.ButtonStatusOn)
+			time.Sleep(25 * time.Millisecond)
+		}
 
-func TextViewFromTextItem(s gma2ws.ServerPlaybackTextItem, bg string, align int) *tview.TextView {
-	tv := tview.NewTextView()
-	tv.SetText(s.Text)
-	tv.SetTextColor(tcell.GetColor(s.Color))
-	if s.Progress != nil && s.Progress.Value > 0 {
-		tv.SetBackgroundColor(tcell.GetColor(s.Progress.BackgroundColor))
-	} else {
-		tv.SetBackgroundColor(tcell.GetColor(bg))
+		for i := 0; i < 8; i++ {
+			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionSelect, xtouch.ButtonStatusOff)
+			time.Sleep(25 * time.Millisecond)
+			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionMute, xtouch.ButtonStatusOff)
+			time.Sleep(25 * time.Millisecond)
+			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionSolo, xtouch.ButtonStatusOff)
+			time.Sleep(25 * time.Millisecond)
+			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionRec, xtouch.ButtonStatusOff)
+			time.Sleep(25 * time.Millisecond)
+		}
+		for button, _ := range xtouch.ButtonToNote {
+			server1.SetButtonStatus(ctx, button, xtouch.ButtonStatusOff)
+			time.Sleep(25 * time.Millisecond)
+		}
 	}
-	tv.SetTextAlign(align)
-	return tv
 }
