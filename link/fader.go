@@ -58,3 +58,11 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 	}
 	return nil
 }
+
+func (l *Link) onFaderChangeEvent(ctx context.Context, e xtouch.FaderChangedEvent) {
+	log := logger.Get(ctx)
+	err := l.GMA.FaderChanged(ctx, e.Fader, 0, e.Position())
+	if err != nil {
+		log.WithError(err).Error("fail to send fader position")
+	}
+}

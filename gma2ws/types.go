@@ -5,10 +5,12 @@ type ItemType int
 type ExecButtonViewMode int
 
 const (
-	RequestTypeGetData   RequestType = "getdata"
-	RequestTypeLogin     RequestType = "login"
-	RequestTypePlaybacks RequestType = "playbacks"
-	RequestTypeClose     RequestType = "close"
+	RequestTypeGetData            RequestType = "getdata"
+	RequestTypeLogin              RequestType = "login"
+	RequestTypePlaybacks          RequestType = "playbacks"
+	RequestTypeClose              RequestType = "close"
+	RequestTypePlaybacksUserInput RequestType = "playbacks_userInput"
+	RequestTypeKeyname            RequestType = "keyname"
 
 	ExecButtonViewModeFader ExecButtonViewMode = 1
 )
@@ -133,4 +135,20 @@ type ServerPlaybackExecutorBlock struct {
 	ValueText   string      `json:"vT"`       // Only on faders
 	Min         float64     `json:"min"`      // Only on faders
 	Max         float64     `json:"max"`      // Only on faders
+}
+
+type ClientRequestPlaybacksUserInput struct {
+	ClientRequestGeneric
+	Executor int     `json:"execIndex"`
+	Page     int     `json:"pageIndex"`
+	Value    float64 `json:"faderValue"`
+	Type     int     `json:"type"`
+}
+
+type ClientRequestKeyName struct {
+	ClientRequestGeneric
+	KeyName         KeyName   `json:"keyname"`
+	Value           KeyStatus `json:"value"`
+	CommandLineText string    `json:"cmdlinetext"`
+	AutoSubmit      bool      `json:"autoSubmit"`
 }

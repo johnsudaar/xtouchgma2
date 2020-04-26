@@ -134,11 +134,17 @@ func (c *Client) login(ctx context.Context) error {
 }
 
 func (c *Client) startKeepAlive() {
-	t := time.NewTicker(20 * time.Second)
+	t := time.NewTicker(2 * time.Second)
 	for {
 		<-t.C
 		c.WriteJSON(ClientHanshake{
 			Session: c.session,
+		})
+
+		c.WriteJSON(ClientRequestGeneric{
+			Session:     c.session,
+			MaxRequests: 1,
+			RequestType: RequestType("presetTypeList"),
 		})
 	}
 }
@@ -173,6 +179,8 @@ func (c *Client) serverResponseHandler(ctx context.Context) {
 			log.Info("Receive request type get data. Ignoring...")
 		case RequestTypePlaybacks:
 			go c.serverResponseHandlePlaybacks(ctx, bufferCopy(buffer))
+		default:
+			fmt.Println(string(buffer))
 		}
 	}
 }

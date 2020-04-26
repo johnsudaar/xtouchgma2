@@ -20,6 +20,10 @@ type Server struct {
 	socketLock *sync.Mutex
 	stop       bool
 	stopLock   *sync.Mutex
+
+	listenerLock           *sync.RWMutex
+	faderChangedListeners  []FaderChangedListener
+	buttonChangedListeners []ButtonChangedListener
 }
 
 func NewServer(port int) *Server {
@@ -27,6 +31,10 @@ func NewServer(port int) *Server {
 		Port:       port,
 		socketLock: &sync.Mutex{},
 		stopLock:   &sync.Mutex{},
+
+		listenerLock:           &sync.RWMutex{},
+		faderChangedListeners:  make([]FaderChangedListener, 0),
+		buttonChangedListeners: make([]ButtonChangedListener, 0),
 	}
 }
 
@@ -88,6 +96,7 @@ func (s *Server) Start(ctx context.Context) error {
 				var midiMessage MidiMessage
 				midiMessage.UnmarshalBinary(buffer)
 				fmt.Printf("%+v\n", midiMessage)
+				s.dispatchMidiMessage(ctx, midiMessage)
 			}
 		}
 	}()

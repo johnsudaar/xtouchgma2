@@ -26,10 +26,15 @@ func New(params NewLinkParams) (*Link, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to create gma client")
 	}
-	return &Link{
+	link := &Link{
 		GMA:    gma2,
 		XTouch: xtouch,
-	}, nil
+	}
+
+	xtouch.SubscribeToFaderChanges(link.onFaderChangeEvent)
+	xtouch.SubscribeButtonChange(link.onButtonChange)
+
+	return link, nil
 }
 
 func (l *Link) Start(ctx context.Context) error {

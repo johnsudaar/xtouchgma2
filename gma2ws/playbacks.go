@@ -78,3 +78,21 @@ func (c *Client) serverResponseHandlePlaybacks(ctx context.Context, buffer []byt
 	default:
 	}
 }
+
+func (c *Client) FaderChanged(ctx context.Context, executor, page int, value float64) error {
+	err := c.WriteJSON(ClientRequestPlaybacksUserInput{
+		ClientRequestGeneric: ClientRequestGeneric{
+			RequestType: RequestTypePlaybacksUserInput,
+			Session:     c.session,
+			MaxRequests: 0,
+		},
+		Executor: executor,
+		Page:     page,
+		Value:    value,
+		Type:     1,
+	})
+	if err != nil {
+		return errors.Wrap(err, "fail to send fader values")
+	}
+	return nil
+}

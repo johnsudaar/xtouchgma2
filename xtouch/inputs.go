@@ -97,7 +97,7 @@ const (
 	FaderButtonPositionEncoder = 32
 )
 
-var ButtonToNote map[Button]byte = map[Button]byte{
+var buttonToNote map[Button]byte = map[Button]byte{
 	ButtonTrack:       40,
 	ButtonPan:         42,
 	ButtonEQ:          44,
@@ -162,6 +162,15 @@ var ButtonToNote map[Button]byte = map[Button]byte{
 	ButtonFlip:        50,
 }
 
+var noteToButton map[byte]Button
+
+func init() {
+	noteToButton = make(map[byte]Button, len(buttonToNote))
+	for button, note := range buttonToNote {
+		noteToButton[note] = button
+	}
+}
+
 func (s *Server) SetFaderButtonStatus(ctx context.Context, fader int, pos FaderButtonPosition, status ButtonStatus) error {
 	err := s.setRawButtonStatus(ctx, byte(pos)+byte(fader), status)
 	if err != nil {
@@ -171,7 +180,7 @@ func (s *Server) SetFaderButtonStatus(ctx context.Context, fader int, pos FaderB
 }
 
 func (s *Server) SetButtonStatus(ctx context.Context, b Button, status ButtonStatus) error {
-	err := s.setRawButtonStatus(ctx, ButtonToNote[b], status)
+	err := s.setRawButtonStatus(ctx, buttonToNote[b], status)
 	if err != nil {
 		return errors.Wrap(err, "fail to send button status")
 	}
