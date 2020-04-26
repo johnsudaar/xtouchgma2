@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Scalingo/go-utils/logger"
@@ -22,6 +23,7 @@ type Client struct {
 	user                string
 	hashedPassword      string
 	session             int
+	writeLock           *sync.Mutex
 	ws                  *websocket.Conn
 	playbackChan        chan []ServerPlaybacks
 	stopResponseHandler chan bool
@@ -36,6 +38,7 @@ func NewClient(host, user, password string) (*Client, error) {
 		hashedPassword:      hashedPassword,
 		playbackChan:        make(chan []ServerPlaybacks),
 		stopResponseHandler: make(chan bool),
+		writeLock:           &sync.Mutex{},
 	}, nil
 }
 
@@ -72,7 +75,7 @@ func (c *Client) Start(ctx context.Context) (Stopper, error) {
 
 func (c *Client) login(ctx context.Context) error {
 	log := logger.Get(ctx)
-	err := c.ws.WriteJSON(ClientHanshake{})
+	err := c.WriteJSON(ClientHanshake{})
 	if err != nil {
 		return errors.Wrap(err, "fail to send client handshake")
 	}
@@ -108,7 +111,7 @@ func (c *Client) login(ctx context.Context) error {
 		Password: c.hashedPassword,
 	}
 
-	c.ws.WriteJSON(login)
+	err = c.WriteJSON(login)
 	if err != nil {
 		return errors.Wrap(err, "fail to send login details")
 	}
@@ -134,7 +137,7 @@ func (c *Client) startKeepAlive() {
 	t := time.NewTicker(20 * time.Second)
 	for {
 		<-t.C
-		c.ws.WriteJSON(ClientHanshake{
+		c.WriteJSON(ClientHanshake{
 			Session: c.session,
 		})
 	}
@@ -172,6 +175,12 @@ func (c *Client) serverResponseHandler(ctx context.Context) {
 			go c.serverResponseHandlePlaybacks(ctx, bufferCopy(buffer))
 		}
 	}
+}
+
+func (c *Client) WriteJSON(data interface{}) error {
+	c.writeLock.Lock()
+	defer c.writeLock.Unlock()
+	return c.ws.WriteJSON(data)
 }
 
 func bufferCopy(buffer []byte) []byte {

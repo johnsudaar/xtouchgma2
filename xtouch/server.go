@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/Scalingo/go-utils/logger"
@@ -13,14 +14,16 @@ import (
 )
 
 type Server struct {
-	Port   int
-	conn   *net.UDPConn
-	client *net.UDPAddr
+	Port       int
+	conn       *net.UDPConn
+	client     *net.UDPAddr
+	socketLock *sync.Mutex
 }
 
 func NewServer(port int) *Server {
 	return &Server{
-		Port: port,
+		Port:       port,
+		socketLock: &sync.Mutex{},
 	}
 }
 
@@ -46,12 +49,19 @@ func (s *Server) Start(ctx context.Context) error {
 
 	buffer := make([]byte, 1024)
 	for {
+		sendKeepalive := false
 		n, from, err := conn.ReadFromUDP(buffer)
 		if err != nil {
 			return errors.Wrap(err, "fail to read udp buffer")
 		}
+		s.socketLock.Lock()
 		if s.client == nil {
-			s.client = from
+			sendKeepalive = true
+		}
+		s.client = from
+		s.socketLock.Unlock()
+
+		if sendKeepalive {
 			s.keepAlive(ctx)
 		}
 
@@ -62,7 +72,6 @@ func (s *Server) Start(ctx context.Context) error {
 			var midiMessage MidiMessage
 			midiMessage.UnmarshalBinary(buffer)
 			fmt.Printf("%+v\n", midiMessage)
-
 		}
 	}
 
@@ -70,6 +79,8 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 func (s *Server) keepAlive(ctx context.Context) {
+	s.socketLock.Lock()
+	defer s.socketLock.Unlock()
 	log := logger.Get(ctx)
 	if s.client == nil {
 		return
@@ -84,6 +95,8 @@ func (s *Server) keepAlive(ctx context.Context) {
 }
 
 func (s *Server) SendRawPacket(ctx context.Context, buff []byte) error {
+	s.socketLock.Lock()
+	defer s.socketLock.Unlock()
 	log := logger.Get(ctx)
 	log.WithField("send_to", s.client).Debug(hex.Dump(buff))
 	_, err := s.conn.WriteToUDP(buff, s.client)

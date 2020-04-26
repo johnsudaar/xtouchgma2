@@ -51,7 +51,7 @@ func (c *Client) Playbacks(page int, ranges []PlaybacksRange) ([]ServerPlaybacks
 		ButtonsViewMode:    0,
 	}
 
-	err := c.ws.WriteJSON(request)
+	err := c.WriteJSON(request)
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to send playback request")
 	}
