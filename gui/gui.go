@@ -136,8 +136,7 @@ func (g *GUI) onStart() {
 
 func (g *GUI) startLink() {
 	if g.link != nil {
-		log := logger.Default()
-		log.AddHook(g)
+		log := logger.Default(logger.WithHooks([]logrus.Hook{g}))
 		ctx := logger.ToCtx(context.Background(), log)
 		err := g.link.Start(ctx)
 		if err != nil {
