@@ -3,7 +3,6 @@ package link
 import (
 	"context"
 
-	"github.com/Scalingo/go-utils/logger"
 	"github.com/johnsudaar/xtouchgma2/xtouch"
 )
 
@@ -63,15 +62,19 @@ var buttonMap map[xtouch.Button]int = map[xtouch.Button]int{
 }
 
 func (l *Link) onButtonChange(ctx context.Context, event xtouch.ButtonChangedEvent) {
-	log := logger.Get(ctx)
 	address, ok := buttonMap[event.Button]
 	if ok {
 		var value byte = 0
 		if event.Status == xtouch.ButtonStatusOn {
 			value = 255
 		}
-		log.Info("sending", address, value)
-
 		l.SetDMXValue(address, value)
+	}
+
+	if event.Button == xtouch.ButtonFaderNext && event.Status == xtouch.ButtonStatusOn {
+		l.FaderPageUp()
+	}
+	if event.Button == xtouch.ButtonFaderPrev && event.Status == xtouch.ButtonStatusOn {
+		l.FaderPageDown()
 	}
 }

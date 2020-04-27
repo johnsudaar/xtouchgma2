@@ -22,6 +22,10 @@ type Link struct {
 	dmxLock      *sync.Mutex
 	gmaHost      string
 	gmaStop      gma2ws.Stopper
+	stop         bool
+	stopLock     *sync.RWMutex
+	faderLock    *sync.Mutex
+	faderPage    int
 }
 
 type NewLinkParams struct {
@@ -51,6 +55,10 @@ func New(params NewLinkParams) (*Link, error) {
 		dmxUniverse:  [512]byte{},
 		dmxLock:      &sync.Mutex{},
 		gmaHost:      params.GMAHost,
+		stop:         false,
+		stopLock:     &sync.RWMutex{},
+		faderLock:    &sync.Mutex{},
+		faderPage:    0,
 	}
 
 	xtouch.SubscribeToFaderChanges(link.onFaderChangeEvent)
@@ -85,13 +93,16 @@ func (l *Link) Start(ctx context.Context) error {
 		return errors.Wrap(err, "fail to start xtouch")
 	}
 
-	go l.startDMXSync()
+	go l.startDMXSync(ctx)
 
 	l.startEventLoop(ctx)
 	return nil
 }
 
 func (l *Link) Stop() {
+	l.stopLock.Lock()
+	l.stop = true
+	l.stopLock.Unlock()
 	if l.gmaStop != nil {
 		l.gmaStop()
 	}

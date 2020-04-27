@@ -9,7 +9,15 @@ import (
 
 func (l *Link) startEventLoop(ctx context.Context) {
 	log := logger.Get(ctx)
+	log.Info("Start main event loop")
 	for {
+		l.stopLock.RLock()
+		stop := l.stop
+		l.stopLock.RUnlock()
+		if stop {
+			log.Info("Stop main event loop")
+			return
+		}
 		time.Sleep(50 * time.Millisecond)
 		err := l.faderGmaToXtouch(ctx)
 		if err != nil {

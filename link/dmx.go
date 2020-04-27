@@ -1,6 +1,11 @@
 package link
 
-import "time"
+import (
+	"context"
+	"time"
+
+	"github.com/Scalingo/go-utils/logger"
+)
 
 func (l *Link) SetDMXValue(address int, value byte) error {
 	l.dmxLock.Lock()
@@ -10,7 +15,9 @@ func (l *Link) SetDMXValue(address int, value byte) error {
 	return nil
 }
 
-func (l *Link) startDMXSync() {
+func (l *Link) startDMXSync(ctx context.Context) {
+	log := logger.Get(ctx)
+	log.Info("Start DMX Sync")
 	for {
 		time.Sleep(50 * time.Millisecond)
 		var universe [512]byte
@@ -19,6 +26,16 @@ func (l *Link) startDMXSync() {
 			universe[i] = v
 		}
 		l.dmxLock.Unlock()
-		l.sacnDMX <- universe
+		l.stopLock.RLock()
+		stop := l.stop
+		if !stop {
+			l.sacnDMX <- universe
+		}
+		l.stopLock.RUnlock()
+		if stop {
+			log.Info("Stop DMX Sync")
+			return
+		}
+
 	}
 }

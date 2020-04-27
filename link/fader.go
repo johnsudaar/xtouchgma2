@@ -13,8 +13,11 @@ import (
 
 func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 	log := logger.Get(ctx)
-	// TODO: Add page support
-	playbacks, err := l.GMA.Playbacks(0, []gma2ws.PlaybacksRange{
+	l.faderLock.Lock()
+	page := l.faderPage
+	l.faderLock.Unlock()
+
+	playbacks, err := l.GMA.Playbacks(page, []gma2ws.PlaybacksRange{
 		gma2ws.PlaybacksRange{
 			Index: 0,
 			Count: 10,
@@ -42,7 +45,7 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 		line2 := ""
 		if len(executor.Cues.Items) == 3 {
 			line2 = executor.Cues.Items[1].Text
-		} else if len(executor.Cues.Items) > 1 {
+		} else if len(executor.Cues.Items) >= 1 {
 			line2 = executor.Cues.Items[0].Text
 		}
 		color, err := xtouch.ClosestScribbleColor(f.BorderColor)
@@ -56,6 +59,8 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 			log.WithError(err).Error("fail to send scribble data")
 		}
 	}
+
+	l.XTouch.SetAssignement(ctx, page+1)
 	return nil
 }
 
@@ -64,5 +69,20 @@ func (l *Link) onFaderChangeEvent(ctx context.Context, e xtouch.FaderChangedEven
 	err := l.GMA.FaderChanged(ctx, e.Fader, 0, e.Position())
 	if err != nil {
 		log.WithError(err).Error("fail to send fader position")
+	}
+}
+
+func (l *Link) FaderPageUp() {
+	l.faderLock.Lock()
+	defer l.faderLock.Unlock()
+	l.faderPage++
+}
+
+func (l *Link) FaderPageDown() {
+	l.faderLock.Lock()
+	defer l.faderLock.Unlock()
+	l.faderPage--
+	if l.faderPage < 0 {
+		l.faderPage = 0
 	}
 }

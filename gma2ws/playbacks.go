@@ -42,7 +42,7 @@ func (c *Client) Playbacks(page int, ranges []PlaybacksRange) ([]ServerPlaybacks
 			Session:     c.session,
 			MaxRequests: 1,
 		},
-		PageIndex:          0,
+		PageIndex:          page,
 		StartIndex:         startIndex,
 		ItemsCount:         itemCount,
 		ItemsType:          itemType,

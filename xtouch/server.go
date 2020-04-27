@@ -122,7 +122,7 @@ func (s *Server) Stop() {
 	}
 	s.stopLock.Lock()
 	s.stop = true
-	s.socketLock.Unlock()
+	s.stopLock.Unlock()
 }
 
 func (s *Server) keepAlive(ctx context.Context) {
