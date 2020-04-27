@@ -12,9 +12,10 @@ func main() {
 	ctx := logger.ToCtx(context.Background(), log)
 
 	link, err := link.New(link.NewLinkParams{
-		GMAHost:     "192.168.1.21",
-		GMAUser:     "john",
-		GMAPassword: "john",
+		GMAHost:      "192.168.1.21",
+		GMAUser:      "john",
+		GMAPassword:  "john",
+		SACNUniverse: 10,
 	})
 	if err != nil {
 		panic(err)

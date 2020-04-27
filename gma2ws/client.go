@@ -134,17 +134,11 @@ func (c *Client) login(ctx context.Context) error {
 }
 
 func (c *Client) startKeepAlive() {
-	t := time.NewTicker(2 * time.Second)
+	t := time.NewTicker(20 * time.Second)
 	for {
 		<-t.C
 		c.WriteJSON(ClientHanshake{
 			Session: c.session,
-		})
-
-		c.WriteJSON(ClientRequestGeneric{
-			Session:     c.session,
-			MaxRequests: 1,
-			RequestType: RequestType("presetTypeList"),
 		})
 	}
 }
