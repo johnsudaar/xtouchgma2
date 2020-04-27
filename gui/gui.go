@@ -10,7 +10,7 @@ import (
 	"fyne.io/fyne"
 	"fyne.io/fyne/app"
 	"fyne.io/fyne/widget"
-	"github.com/Scalingo/go-internal-tools/logger"
+	"github.com/Scalingo/go-utils/logger"
 	"github.com/johnsudaar/xtouchgma2/link"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
