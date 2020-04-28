@@ -13,19 +13,24 @@ import (
 var SACN_CID = [16]byte{0x13, 0x37, 0xde, 0xad, 0xbe, 0xef}
 
 type Link struct {
-	XTouch       *xtouch.Server
-	GMA          *gma2ws.Client
-	SACN         sacn.Transmitter
-	sacnDMX      chan<- [512]byte
-	sacnUniverse uint16
-	dmxUniverse  [512]byte
-	dmxLock      *sync.Mutex
-	gmaHost      string
-	gmaStop      gma2ws.Stopper
-	stop         bool
-	stopLock     *sync.RWMutex
-	faderLock    *sync.Mutex
-	faderPage    int
+	XTouch                 *xtouch.Server
+	GMA                    *gma2ws.Client
+	SACN                   sacn.Transmitter
+	sacnDMX                chan<- [512]byte
+	sacnUniverse           uint16
+	dmxUniverse            [512]byte
+	dmxLock                *sync.Mutex
+	gmaHost                string
+	gmaStop                gma2ws.Stopper
+	stop                   bool
+	stopLock               *sync.RWMutex
+	faderLock              *sync.Mutex
+	faderPage              int
+	encoderAttributes      [8]string
+	encoderAttributesCoeff [8]int
+	encoderAsAttributes    bool
+	encoderGMAValue        [8]float64
+	encoderLock            *sync.RWMutex
 }
 
 type NewLinkParams struct {
@@ -48,21 +53,26 @@ func New(params NewLinkParams) (*Link, error) {
 		return nil, errors.Wrap(err, "fail to create gma client")
 	}
 	link := &Link{
-		GMA:          gma2,
-		XTouch:       xtouch,
-		SACN:         sacn,
-		sacnUniverse: params.SACNUniverse,
-		dmxUniverse:  [512]byte{},
-		dmxLock:      &sync.Mutex{},
-		gmaHost:      params.GMAHost,
-		stop:         false,
-		stopLock:     &sync.RWMutex{},
-		faderLock:    &sync.Mutex{},
-		faderPage:    0,
+		GMA:                    gma2,
+		XTouch:                 xtouch,
+		SACN:                   sacn,
+		sacnUniverse:           params.SACNUniverse,
+		dmxUniverse:            [512]byte{},
+		dmxLock:                &sync.Mutex{},
+		gmaHost:                params.GMAHost,
+		stop:                   false,
+		stopLock:               &sync.RWMutex{},
+		faderLock:              &sync.Mutex{},
+		faderPage:              0,
+		encoderAttributes:      [8]string{},
+		encoderAttributesCoeff: [8]int{},
+		encoderAsAttributes:    false,
+		encoderLock:            &sync.RWMutex{},
 	}
 
 	xtouch.SubscribeToFaderChanges(link.onFaderChangeEvent)
-	xtouch.SubscribeButtonChange(link.onButtonChange)
+	xtouch.SubscribeButtonChanges(link.onButtonChange)
+	xtouch.SubscribeEncoderChanges(link.onEncoderChangedEvent)
 
 	return link, nil
 }

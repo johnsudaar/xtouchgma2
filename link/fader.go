@@ -22,12 +22,16 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 			Index: 0,
 			Count: 10,
 		},
+		gma2ws.PlaybacksRange{
+			Index: 15,
+			Count: 10,
+		},
 	})
 	if err != nil {
 		return errors.Wrap(err, "fail to sync GMA faders")
 	}
 
-	for i := 0; i < 8; i++ {
+	for i := 0; i < 9; i++ {
 		log := log.WithFields(logrus.Fields{
 			"fader": i,
 		})
@@ -40,6 +44,9 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 		err := l.XTouch.SetFaderPos(ctx, i, value)
 		if err != nil {
 			log.WithError(err).Error("fail to send fader to its position")
+		}
+		if i == 8 {
+			continue
 		}
 		line1 := executor.TextTop.Text
 		line2 := ""
@@ -60,13 +67,33 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 		}
 	}
 
+	l.encoderLock.Lock()
+	defer l.encoderLock.Unlock()
+	for i := 0; i < 8; i++ {
+		executor := playbacks[1].Items[i/5][i%5]
+		f := executor.ExecutorBlocks[0].Fader
+		var value float64
+		if f.Max != 0 {
+			value = float64(f.Value) / float64(f.Max-f.Min)
+		}
+		l.encoderGMAValue[i] = value
+		if l.encoderAsAttributes {
+			continue
+		}
+		l.XTouch.SetRingPosition(ctx, i, value)
+	}
+
 	l.XTouch.SetAssignement(ctx, page+1)
 	return nil
 }
 
 func (l *Link) onFaderChangeEvent(ctx context.Context, e xtouch.FaderChangedEvent) {
+	l.faderLock.Lock()
+	page := l.faderPage
+	l.faderLock.Unlock()
+
 	log := logger.Get(ctx)
-	err := l.GMA.FaderChanged(ctx, e.Fader, 0, e.Position())
+	err := l.GMA.FaderChanged(ctx, e.Fader, page, e.Position())
 	if err != nil {
 		log.WithError(err).Error("fail to send fader position")
 	}

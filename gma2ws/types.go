@@ -11,6 +11,7 @@ const (
 	RequestTypeClose              RequestType = "close"
 	RequestTypePlaybacksUserInput RequestType = "playbacks_userInput"
 	RequestTypeKeyname            RequestType = "keyname"
+	RequestTypeCommand            RequestType = "command"
 
 	ExecButtonViewModeFader ExecButtonViewMode = 1
 )
@@ -151,4 +152,9 @@ type ClientRequestKeyName struct {
 	Value           KeyStatus `json:"value"`
 	CommandLineText string    `json:"cmdlinetext"`
 	AutoSubmit      bool      `json:"autoSubmit"`
+}
+
+type ClientRequestCommand struct {
+	ClientRequestGeneric
+	Command string `json:"command"`
 }

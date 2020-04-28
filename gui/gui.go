@@ -17,35 +17,46 @@ import (
 )
 
 type GUI struct {
-	gMAIP        *widget.Entry
-	gMAUser      *widget.Entry
-	gMAPassword  *widget.Entry
-	sACNUniverse *widget.Entry
-	status       *widget.Label
-	formErrors   *widget.Label
-	logs         *widget.Entry
-	start        *widget.Button
-	stop         *widget.Button
-	app          fyne.App
-	window       fyne.Window
-	link         *link.Link
-	logChan      chan []string
+	gMAIP                   *widget.Entry
+	gMAUser                 *widget.Entry
+	gMAPassword             *widget.Entry
+	sACNUniverse            *widget.Entry
+	status                  *widget.Label
+	formErrors              *widget.Label
+	logs                    *widget.Entry
+	start                   *widget.Button
+	stop                    *widget.Button
+	updateEncoders          *widget.Button
+	mapEncodersToAttributes *widget.Check
+
+	encoderAttributes []*widget.Entry
+	app               fyne.App
+	window            fyne.Window
+	link              *link.Link
+	logChan           chan []string
 }
 
 func New() *GUI {
 	gui := &GUI{
-		gMAIP:        widget.NewEntry(),
-		gMAUser:      widget.NewEntry(),
-		gMAPassword:  widget.NewPasswordEntry(),
-		sACNUniverse: widget.NewEntry(),
-		status:       widget.NewLabel("Status: stopped"),
-		formErrors:   widget.NewLabel(""),
-		logs:         widget.NewMultiLineEntry(),
-		logChan:      make(chan []string, 10),
+		gMAIP:             widget.NewEntry(),
+		gMAUser:           widget.NewEntry(),
+		gMAPassword:       widget.NewPasswordEntry(),
+		sACNUniverse:      widget.NewEntry(),
+		status:            widget.NewLabel("Status: stopped"),
+		formErrors:        widget.NewLabel(""),
+		encoderAttributes: make([]*widget.Entry, 8),
+		logs:              widget.NewMultiLineEntry(),
+		logChan:           make(chan []string, 10),
 	}
 
+	for i := 0; i < 8; i++ {
+		gui.encoderAttributes[i] = widget.NewEntry()
+	}
+
+	gui.mapEncodersToAttributes = widget.NewCheck("Map encoders to attributes", gui.onMapEncoderToAttributesChanged)
 	gui.start = widget.NewButton("Start", gui.onStart)
 	gui.stop = widget.NewButton("Stop", gui.onStop)
+	gui.updateEncoders = widget.NewButton("Update", gui.onUpdateEncoders)
 	gui.app = app.New()
 	gui.window = gui.app.NewWindow("XTouch2GMA")
 
@@ -56,35 +67,71 @@ func New() *GUI {
 
 	gui.buildApp()
 
+	err := gui.loadSettings()
+	if err != nil {
+		gui.window.SetContent(
+			widget.NewVBox(
+				widget.NewLabel("Error: "+err.Error()),
+				widget.NewButton("Ok", func() {
+					gui.app.Quit()
+				}),
+			),
+		)
+		gui.window.ShowAndRun()
+		panic(err)
+	}
+
 	return gui
 }
 
 func (g *GUI) buildApp() {
 	g.window.SetContent(
-		widget.NewVBox(
-			widget.NewForm(
-				&widget.FormItem{
-					Text:   "GrandMA IP: ",
-					Widget: g.gMAIP,
-				},
-				&widget.FormItem{
-					Text:   "GrandMA User: ",
-					Widget: g.gMAUser,
-				},
-				&widget.FormItem{
-					Text:   "GrandMA Password: ",
-					Widget: g.gMAPassword,
-				},
-				&widget.FormItem{
-					Text:   "sACN Universe: ",
-					Widget: g.sACNUniverse,
-				},
+		widget.NewTabContainer(
+			widget.NewTabItem(
+				"Configuration",
+				widget.NewVBox(
+					widget.NewForm(
+						&widget.FormItem{
+							Text:   "GrandMA IP: ",
+							Widget: g.gMAIP,
+						},
+						&widget.FormItem{
+							Text:   "GrandMA User: ",
+							Widget: g.gMAUser,
+						},
+						&widget.FormItem{
+							Text:   "GrandMA Password: ",
+							Widget: g.gMAPassword,
+						},
+						&widget.FormItem{
+							Text:   "sACN Universe: ",
+							Widget: g.sACNUniverse,
+						},
+					),
+					g.formErrors,
+					g.start,
+					g.stop,
+					g.status,
+					g.logs,
+				),
 			),
-			g.formErrors,
-			g.start,
-			g.stop,
-			g.status,
-			g.logs,
+			widget.NewTabItem(
+				"Encoders",
+				widget.NewVBox(
+					widget.NewForm(
+						widget.NewFormItem("Encoder 1 attribute: ", g.encoderAttributes[0]),
+						widget.NewFormItem("Encoder 2 attribute: ", g.encoderAttributes[1]),
+						widget.NewFormItem("Encoder 3 attribute: ", g.encoderAttributes[2]),
+						widget.NewFormItem("Encoder 4 attribute: ", g.encoderAttributes[3]),
+						widget.NewFormItem("Encoder 5 attribute: ", g.encoderAttributes[4]),
+						widget.NewFormItem("Encoder 6 attribute: ", g.encoderAttributes[5]),
+						widget.NewFormItem("Encoder 7 attribute: ", g.encoderAttributes[6]),
+						widget.NewFormItem("Encoder 8 attribute: ", g.encoderAttributes[7]),
+					),
+					g.updateEncoders,
+					g.mapEncodersToAttributes,
+				),
+			),
 		),
 	)
 	g.logs.SetReadOnly(true)
@@ -130,6 +177,8 @@ func (g *GUI) onStart() {
 	g.link = link
 
 	g.stop.Enable()
+	g.saveSettings()
+	g.updateLinkEncoders()
 	go g.startLink()
 	g.SetStatus("Connected!")
 }
@@ -172,6 +221,35 @@ func (g *GUI) onStop() {
 	g.stop.Disable()
 	g.start.Enable()
 	g.SetStatus("stopped")
+}
+
+func (g *GUI) onUpdateEncoders() {
+	g.saveSettings()
+	g.updateLinkEncoders()
+}
+
+func (g *GUI) onMapEncoderToAttributesChanged(activated bool) {
+	g.saveSettings()
+	g.updateLinkEncoders()
+}
+
+func (g *GUI) updateLinkEncoders() {
+	if g.link == nil {
+		return
+	}
+
+	g.link.UseEncoderAsAttributes(g.mapEncodersToAttributes.Checked)
+	g.link.SetEncoderAttributes([8]string{
+		g.encoderAttributes[0].Text,
+		g.encoderAttributes[1].Text,
+		g.encoderAttributes[2].Text,
+		g.encoderAttributes[3].Text,
+		g.encoderAttributes[4].Text,
+		g.encoderAttributes[5].Text,
+		g.encoderAttributes[6].Text,
+		g.encoderAttributes[7].Text,
+	})
+
 }
 
 func (g *GUI) SetStatus(status string) {
@@ -235,7 +313,6 @@ func (g *GUI) Fire(entry *logrus.Entry) error {
 	}
 
 	values := strings.Split(string(formatted), "\n")
-
 	g.logChan <- values
 
 	return nil
@@ -244,11 +321,23 @@ func (g *GUI) Fire(entry *logrus.Entry) error {
 func (g *GUI) startLogs() {
 	buffer := []string{}
 	for logs := range g.logChan {
+		logs := removeEmpty(logs)
 		buffer = append(logs, buffer...)
-		if len(buffer) > 1000 {
-			buffer = buffer[:1000]
+		if len(buffer) > 15 {
+			buffer = buffer[:15]
 		}
 		g.logs.Text = strings.Join(buffer, "\n")
 		g.logs.Refresh()
 	}
+}
+
+func removeEmpty(logs []string) []string {
+	res := make([]string, 0)
+	for _, s := range logs {
+		if s == "" {
+			continue
+		}
+		res = append(res, s)
+	}
+	return res
 }

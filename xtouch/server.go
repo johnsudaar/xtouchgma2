@@ -21,9 +21,10 @@ type Server struct {
 	stop       bool
 	stopLock   *sync.Mutex
 
-	listenerLock           *sync.RWMutex
-	faderChangedListeners  []FaderChangedListener
-	buttonChangedListeners []ButtonChangedListener
+	listenerLock            *sync.RWMutex
+	faderChangedListeners   []FaderChangedListener
+	buttonChangedListeners  []ButtonChangedListener
+	encoderChangedListeners []EncoderChangedListener
 }
 
 func NewServer(port int) *Server {
@@ -32,9 +33,10 @@ func NewServer(port int) *Server {
 		socketLock: &sync.Mutex{},
 		stopLock:   &sync.Mutex{},
 
-		listenerLock:           &sync.RWMutex{},
-		faderChangedListeners:  make([]FaderChangedListener, 0),
-		buttonChangedListeners: make([]ButtonChangedListener, 0),
+		listenerLock:            &sync.RWMutex{},
+		faderChangedListeners:   make([]FaderChangedListener, 0),
+		buttonChangedListeners:  make([]ButtonChangedListener, 0),
+		encoderChangedListeners: make([]EncoderChangedListener, 0),
 	}
 }
 

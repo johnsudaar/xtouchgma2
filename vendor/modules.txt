@@ -153,3 +153,5 @@ golang.org/x/text/internal/utf8internal
 golang.org/x/text/language
 golang.org/x/text/runes
 golang.org/x/text/transform
+# gopkg.in/ini.v1 v1.55.0
+gopkg.in/ini.v1

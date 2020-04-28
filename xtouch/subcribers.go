@@ -4,6 +4,7 @@ import "context"
 
 type FaderChangedListener func(context.Context, FaderChangedEvent)
 type ButtonChangedListener func(context.Context, ButtonChangedEvent)
+type EncoderChangedListener func(context.Context, EncoderChangedEvent)
 
 func (s *Server) SubscribeToFaderChanges(l FaderChangedListener) {
 	s.listenerLock.Lock()
@@ -19,7 +20,7 @@ func (s *Server) sendFaderChange(ctx context.Context, e FaderChangedEvent) {
 	}
 }
 
-func (s *Server) SubscribeButtonChange(l ButtonChangedListener) {
+func (s *Server) SubscribeButtonChanges(l ButtonChangedListener) {
 	s.listenerLock.Lock()
 	defer s.listenerLock.Unlock()
 	s.buttonChangedListeners = append(s.buttonChangedListeners, l)
@@ -31,4 +32,18 @@ func (s *Server) sendButtonChange(ctx context.Context, e ButtonChangedEvent) {
 	for _, l := range s.buttonChangedListeners {
 		go l(ctx, e)
 	}
+}
+
+func (s *Server) sendEncoderChangedEvent(ctx context.Context, e EncoderChangedEvent) {
+	s.listenerLock.RLock()
+	defer s.listenerLock.RUnlock()
+	for _, l := range s.encoderChangedListeners {
+		go l(ctx, e)
+	}
+}
+
+func (s *Server) SubscribeEncoderChanges(l EncoderChangedListener) {
+	s.listenerLock.Lock()
+	defer s.listenerLock.Unlock()
+	s.encoderChangedListeners = append(s.encoderChangedListeners, l)
 }
