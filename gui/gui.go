@@ -17,17 +17,16 @@ import (
 )
 
 type GUI struct {
-	gMAIP                   *widget.Entry
-	gMAUser                 *widget.Entry
-	gMAPassword             *widget.Entry
-	sACNUniverse            *widget.Entry
-	status                  *widget.Label
-	formErrors              *widget.Label
-	logs                    *widget.Entry
-	start                   *widget.Button
-	stop                    *widget.Button
-	updateEncoders          *widget.Button
-	mapEncodersToAttributes *widget.Check
+	gMAIP          *widget.Entry
+	gMAUser        *widget.Entry
+	gMAPassword    *widget.Entry
+	sACNUniverse   *widget.Entry
+	status         *widget.Label
+	formErrors     *widget.Label
+	logs           *widget.Entry
+	start          *widget.Button
+	stop           *widget.Button
+	updateEncoders *widget.Button
 
 	encoderAttributes []*widget.Entry
 	app               fyne.App
@@ -53,7 +52,6 @@ func New() *GUI {
 		gui.encoderAttributes[i] = widget.NewEntry()
 	}
 
-	gui.mapEncodersToAttributes = widget.NewCheck("Map encoders to attributes", gui.onMapEncoderToAttributesChanged)
 	gui.start = widget.NewButton("Start", gui.onStart)
 	gui.stop = widget.NewButton("Stop", gui.onStop)
 	gui.updateEncoders = widget.NewButton("Update", gui.onUpdateEncoders)
@@ -129,7 +127,6 @@ func (g *GUI) buildApp() {
 						widget.NewFormItem("Encoder 8 attribute: ", g.encoderAttributes[7]),
 					),
 					g.updateEncoders,
-					g.mapEncodersToAttributes,
 				),
 			),
 		),
@@ -228,17 +225,11 @@ func (g *GUI) onUpdateEncoders() {
 	g.updateLinkEncoders()
 }
 
-func (g *GUI) onMapEncoderToAttributesChanged(activated bool) {
-	g.saveSettings()
-	g.updateLinkEncoders()
-}
-
 func (g *GUI) updateLinkEncoders() {
 	if g.link == nil {
 		return
 	}
 
-	g.link.UseEncoderAsAttributes(g.mapEncodersToAttributes.Checked)
 	g.link.SetEncoderAttributes([8]string{
 		g.encoderAttributes[0].Text,
 		g.encoderAttributes[1].Text,
@@ -249,7 +240,6 @@ func (g *GUI) updateLinkEncoders() {
 		g.encoderAttributes[6].Text,
 		g.encoderAttributes[7].Text,
 	})
-
 }
 
 func (g *GUI) SetStatus(status string) {

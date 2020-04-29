@@ -144,6 +144,9 @@ type ClientRequestPlaybacksUserInput struct {
 	Page     int     `json:"pageIndex"`
 	Value    float64 `json:"faderValue"`
 	Type     int     `json:"type"`
+	ButtonID int     `json:"buttonId"`
+	Pressed  bool    `json:"pressed"`
+	Released bool    `json:"released"`
 }
 
 type ClientRequestKeyName struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/johnsudaar/xtouchgma2/xtouch"
+	"github.com/pkg/errors"
 )
 
 var buttonMap map[xtouch.Button]int = map[xtouch.Button]int{
@@ -62,19 +63,117 @@ var buttonMap map[xtouch.Button]int = map[xtouch.Button]int{
 }
 
 func (l *Link) onButtonChange(ctx context.Context, event xtouch.ButtonChangedEvent) {
-	address, ok := buttonMap[event.Button]
-	if ok {
-		var value byte = 0
-		if event.Status == xtouch.ButtonStatusOn {
-			value = 255
+	if event.Type == xtouch.ButtonTypeCommand {
+		address, ok := buttonMap[event.Button]
+		if ok {
+			var value byte = 0
+			if event.Status == xtouch.ButtonStatusOn {
+				value = 255
+			}
+			l.SetDMXValue(address, value)
+			return
 		}
-		l.SetDMXValue(address, value)
+
+		if event.Button == xtouch.ButtonFlip {
+			l.faderLock.Lock()
+			page := l.faderPage
+			l.faderLock.Unlock()
+			l.GMA.ButtonChanged(ctx, 8, page, 0, event.Status == xtouch.ButtonStatusOn)
+			return
+		}
+
+		if event.Button == xtouch.ButtonFaderNext && event.Status == xtouch.ButtonStatusOn {
+			l.FaderPageUp()
+			return
+		}
+		if event.Button == xtouch.ButtonFaderPrev && event.Status == xtouch.ButtonStatusOn {
+			l.FaderPageDown()
+			return
+		}
+
+		if event.Button == xtouch.ButtonChannelNext && event.Status == xtouch.ButtonStatusOn {
+			l.encoderLock.Lock()
+			l.encoderAsAttributes = true
+			l.encoderLock.Unlock()
+			return
+		}
+
+		if event.Button == xtouch.ButtonChannelPrev && event.Status == xtouch.ButtonStatusOn {
+			l.encoderLock.Lock()
+			l.encoderAsAttributes = false
+			l.encoderLock.Unlock()
+			return
+		}
 	}
 
-	if event.Button == xtouch.ButtonFaderNext && event.Status == xtouch.ButtonStatusOn {
-		l.FaderPageUp()
+	if event.Type == xtouch.ButtonTypeSelect ||
+		event.Type == xtouch.ButtonTypeMute ||
+		event.Type == xtouch.ButtonTypeSolo ||
+		event.Type == xtouch.ButtonTypeRec {
+		l.faderLock.Lock()
+		page := l.faderPage
+		l.faderLock.Unlock()
+
+		executor := event.Executor
+		buttonID := 0
+		if event.Type == xtouch.ButtonTypeMute {
+			buttonID = 1
+		} else if event.Type == xtouch.ButtonTypeSolo {
+			buttonID = 2
+		}
+
+		if event.Type == xtouch.ButtonTypeRec {
+			executor += 100
+		}
+
+		l.GMA.ButtonChanged(ctx, executor, page, buttonID, event.Status == xtouch.ButtonStatusOn)
 	}
-	if event.Button == xtouch.ButtonFaderPrev && event.Status == xtouch.ButtonStatusOn {
-		l.FaderPageDown()
+
+	if event.Type == xtouch.ButtonTypeRotary {
+		l.encoderLock.RLock()
+		encoderAsAttributes := l.encoderAsAttributes
+		l.encoderLock.RUnlock()
+
+		if encoderAsAttributes {
+			if event.Status == xtouch.ButtonStatusOff {
+				return
+			}
+			l.encoderLock.Lock()
+			l.encoderAttributesCoeff[event.Executor] = (l.encoderAttributesCoeff[event.Executor] + 1) % len(encodersCoeff)
+			l.encoderLock.Unlock()
+		} else {
+			l.faderLock.Lock()
+			page := l.faderPage
+			l.faderLock.Unlock()
+			l.GMA.ButtonChanged(ctx, 15+event.Executor, page, 0, event.Status == xtouch.ButtonStatusOn)
+		}
 	}
+}
+
+func (l *Link) updateButtons(ctx context.Context) error {
+	l.encoderLock.RLock()
+	encoderAsAttributes := l.encoderAsAttributes
+	l.encoderLock.RUnlock()
+
+	if encoderAsAttributes {
+		err := l.XTouch.SetButtonStatus(ctx, xtouch.ButtonChannelPrev, xtouch.ButtonStatusOff)
+		if err != nil {
+			return errors.Wrap(err, "fail to set channel prev status")
+		}
+		err = l.XTouch.SetButtonStatus(ctx, xtouch.ButtonChannelNext, xtouch.ButtonStatusOn)
+		if err != nil {
+			return errors.Wrap(err, "fail to set channel next status")
+		}
+	} else {
+		err := l.XTouch.SetButtonStatus(ctx, xtouch.ButtonChannelPrev, xtouch.ButtonStatusOn)
+		if err != nil {
+			return errors.Wrap(err, "fail to set channel prev status")
+		}
+		err = l.XTouch.SetButtonStatus(ctx, xtouch.ButtonChannelNext, xtouch.ButtonStatusOff)
+		if err != nil {
+			return errors.Wrap(err, "fail to set channel next status")
+		}
+
+	}
+	return nil
 }

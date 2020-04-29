@@ -96,3 +96,24 @@ func (c *Client) FaderChanged(ctx context.Context, executor, page int, value flo
 	}
 	return nil
 }
+
+func (c *Client) ButtonChanged(ctx context.Context, executor, page, button int, value bool) error {
+	err := c.WriteJSON(ClientRequestPlaybacksUserInput{
+		ClientRequestGeneric: ClientRequestGeneric{
+			RequestType: RequestTypePlaybacksUserInput,
+			Session:     c.session,
+			MaxRequests: 0,
+		},
+		Executor: executor,
+		Page:     page,
+		Type:     0,
+		ButtonID: button,
+		Pressed:  value,
+		Released: !value,
+	})
+	if err != nil {
+		return errors.Wrap(err, "fail to send button")
+	}
+	return nil
+
+}

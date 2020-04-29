@@ -28,5 +28,10 @@ func (l *Link) startEventLoop(ctx context.Context) {
 		if err != nil {
 			log.WithError(err).Error("fail to update encoder rings")
 		}
+		err = l.updateButtons(ctx)
+		if err != nil {
+			log.WithError(err).Error("fail to update encoder rings")
+		}
+
 	}
 }

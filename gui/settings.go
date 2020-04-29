@@ -19,11 +19,6 @@ func (g *GUI) saveSettings() {
 	for i := 0; i < 8; i++ {
 		cfg.Section("ENCODERS").NewKey(strconv.Itoa(i+1), g.encoderAttributes[i].Text)
 	}
-	if g.mapEncodersToAttributes.Checked {
-		cfg.Section("ENCODERS").NewKey("MAP_ENCODER_TO_ATTRIBUTES", "true")
-	} else {
-		cfg.Section("ENCODERS").NewKey("MAP_ENCODER_TO_ATTRIBUTES", "false")
-	}
 
 	err := cfg.SaveTo("xtouch2gma.ini")
 	if err != nil {
@@ -44,8 +39,6 @@ func (g *GUI) loadSettings() error {
 	for i := 0; i < 8; i++ {
 		g.encoderAttributes[i].Text = cfg.Section("ENCODERS").Key(strconv.Itoa(i + 1)).String()
 	}
-
-	g.mapEncodersToAttributes.Checked = cfg.Section("ENCODERS").Key("MAP_ENCODER_TO_ATTRIBUTES").String() == "true"
 
 	return nil
 }
