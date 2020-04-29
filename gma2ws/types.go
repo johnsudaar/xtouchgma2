@@ -73,6 +73,11 @@ type ServerResponseGeneric struct {
 	WorldIndex   int         `json:"worldIndex"`
 }
 
+type ServerResponseGetData struct {
+	ServerResponseGeneric
+	Data []map[string]string `json:"data"`
+}
+
 type ServerResponsePlayback struct {
 	ServerResponseGeneric
 	ResponseSubType int               `json:"responseSubType"` // ???
@@ -151,10 +156,10 @@ type ClientRequestPlaybacksUserInput struct {
 
 type ClientRequestKeyName struct {
 	ClientRequestGeneric
-	KeyName         KeyName   `json:"keyname"`
-	Value           KeyStatus `json:"value"`
-	CommandLineText string    `json:"cmdlinetext"`
-	AutoSubmit      bool      `json:"autoSubmit"`
+	KeyName         KeyName `json:"keyname"`
+	Value           int     `json:"value"`
+	CommandLineText string  `json:"cmdlinetext"`
+	AutoSubmit      bool    `json:"autoSubmit"`
 }
 
 type ClientRequestCommand struct {

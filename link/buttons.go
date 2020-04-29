@@ -3,6 +3,7 @@ package link
 import (
 	"context"
 
+	"github.com/johnsudaar/xtouchgma2/gma2ws"
 	"github.com/johnsudaar/xtouchgma2/xtouch"
 	"github.com/pkg/errors"
 )
@@ -173,7 +174,50 @@ func (l *Link) updateButtons(ctx context.Context) error {
 		if err != nil {
 			return errors.Wrap(err, "fail to set channel next status")
 		}
+	}
 
+	res, err := l.GMA.KeyStatuses("set", "edit", "clear", "solo", "high", "align")
+	if err != nil {
+		return errors.Wrap(err, "fail to get gma key statuses")
+	}
+
+	for key, status := range res {
+		var button xtouch.Button
+		switch key {
+		case "set":
+			button = xtouch.ButtonZoom
+		case "edit":
+			button = xtouch.ButtonF3
+		case "clear":
+			button = xtouch.ButtonF5
+		case "solo":
+			button = xtouch.ButtonPan
+		case "high":
+			button = xtouch.ButtonTrack
+		case "align":
+			button = xtouch.ButtonInst
+		}
+		err := l.setKeyStatus(ctx, button, status)
+		if err != nil {
+			return errors.Wrap(err, "fail to update button")
+		}
+	}
+
+	return nil
+}
+
+func (l *Link) setKeyStatus(ctx context.Context, key xtouch.Button, status gma2ws.KeyStatus) error {
+	var bStatus xtouch.ButtonStatus = xtouch.ButtonStatusOff
+	if status == gma2ws.KeyStatusOn {
+		bStatus = xtouch.ButtonStatusOn
+	}
+	if status == gma2ws.KeyStatusBlink {
+		bStatus = xtouch.ButtonStatusBlink
+	}
+
+	err := l.XTouch.SetButtonStatus(ctx, key, bStatus)
+	if err != nil {
+		return errors.Wrap(err, "fail to send button status")
 	}
 	return nil
 }

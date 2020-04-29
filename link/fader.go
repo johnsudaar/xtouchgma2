@@ -19,12 +19,19 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 
 	playbacks, err := l.GMA.Playbacks(page, []gma2ws.PlaybacksRange{
 		gma2ws.PlaybacksRange{
-			Index: 0,
-			Count: 10,
+			Index:    0,
+			Count:    10,
+			ItemType: gma2ws.PlaybacksItemTypeFader,
 		},
 		gma2ws.PlaybacksRange{
-			Index: 15,
-			Count: 10,
+			Index:    15,
+			Count:    10,
+			ItemType: gma2ws.PlaybacksItemTypeFader,
+		},
+		gma2ws.PlaybacksRange{
+			Index:    100,
+			Count:    10,
+			ItemType: gma2ws.PlaybacksItemTypeButton,
 		},
 	})
 	if err != nil {
@@ -65,6 +72,16 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 		if err != nil {
 			log.WithError(err).Error("fail to send scribble data")
 		}
+
+		var buttonStatus xtouch.ButtonStatus = xtouch.ButtonStatusOff
+		if executor.IsRun != 0 {
+			buttonStatus = xtouch.ButtonStatusOn
+		}
+		err = l.XTouch.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionSelect, buttonStatus)
+		if err != nil {
+			return errors.Wrap(err, "fail to change button status")
+		}
+
 	}
 
 	l.encoderLock.Lock()
@@ -81,6 +98,18 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 			continue
 		}
 		l.XTouch.SetRingPosition(ctx, i, value)
+	}
+
+	for i := 0; i < 8; i++ {
+		executor := playbacks[2].Items[i/5][i%5]
+		var value xtouch.ButtonStatus = xtouch.ButtonStatusOff
+		if executor.IsRun != 0 {
+			value = xtouch.ButtonStatusOn
+		}
+		err := l.XTouch.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionRec, value)
+		if err != nil {
+			return errors.Wrap(err, "fail to change button status")
+		}
 	}
 
 	l.XTouch.SetAssignement(ctx, page+1)

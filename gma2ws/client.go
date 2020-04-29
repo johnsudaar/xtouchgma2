@@ -26,6 +26,7 @@ type Client struct {
 	writeLock           *sync.Mutex
 	ws                  *websocket.Conn
 	playbackChan        chan []ServerPlaybacks
+	getDataChan         chan []map[string]string
 	stopResponseHandler chan bool
 }
 
@@ -37,6 +38,7 @@ func NewClient(host, user, password string) (*Client, error) {
 		user:                user,
 		hashedPassword:      hashedPassword,
 		playbackChan:        make(chan []ServerPlaybacks),
+		getDataChan:         make(chan []map[string]string),
 		stopResponseHandler: make(chan bool),
 		writeLock:           &sync.Mutex{},
 	}, nil
@@ -170,7 +172,7 @@ func (c *Client) serverResponseHandler(ctx context.Context) {
 		case RequestTypeLogin:
 			log.Info("Receive request type login. Ignoring...")
 		case RequestTypeGetData:
-			log.Info("Receive request type get data. Ignoring...")
+			go c.serverResponseHandleGetData(ctx, bufferCopy(buffer))
 		case RequestTypePlaybacks:
 			go c.serverResponseHandlePlaybacks(ctx, bufferCopy(buffer))
 		default:

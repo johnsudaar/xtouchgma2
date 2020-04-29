@@ -10,9 +10,17 @@ import (
 	"github.com/pkg/errors"
 )
 
+type PlaybacksItemType int
+
+const (
+	PlaybacksItemTypeFader  PlaybacksItemType = 2
+	PlaybacksItemTypeButton PlaybacksItemType = 3
+)
+
 type PlaybacksRange struct {
-	Index int
-	Count int
+	Index    int
+	Count    int
+	ItemType PlaybacksItemType
 }
 
 type PlaybackResonse struct {
@@ -34,7 +42,7 @@ func (c *Client) Playbacks(page int, ranges []PlaybacksRange) ([]ServerPlaybacks
 		}
 		startIndex[i] = r.Index
 		itemCount[i] = r.Count
-		itemType[i] = 2
+		itemType[i] = int(r.ItemType)
 	}
 	request := ClientRequestPlaybacks{
 		ClientRequestGeneric: ClientRequestGeneric{
