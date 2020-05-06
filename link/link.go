@@ -92,6 +92,8 @@ func (l *Link) Start(ctx context.Context) error {
 	stop, err := l.GMA.Start(ctx)
 	if err != nil {
 		close(dmx)
+		l.sacnDMX = nil
+		l.stop = true
 		return errors.Wrap(err, "fail to start gma")
 	}
 	l.gmaStop = stop
@@ -100,6 +102,8 @@ func (l *Link) Start(ctx context.Context) error {
 	if err != nil {
 		close(dmx)
 		stop()
+		l.sacnDMX = nil
+		l.stop = true
 		return errors.Wrap(err, "fail to start xtouch")
 	}
 
@@ -111,16 +115,24 @@ func (l *Link) Start(ctx context.Context) error {
 
 func (l *Link) Stop() {
 	l.stopLock.Lock()
+	if l.stop {
+		l.stopLock.Unlock()
+		return
+	}
+
 	l.stop = true
 	l.stopLock.Unlock()
 	if l.gmaStop != nil {
 		l.gmaStop()
+		l.gmaStop = nil
 	}
 	if l.XTouch != nil {
 		l.XTouch.Stop()
+		l.XTouch = nil
 	}
 
 	if l.sacnDMX != nil {
 		close(l.sacnDMX)
+		l.sacnDMX = nil
 	}
 }

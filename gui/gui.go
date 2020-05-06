@@ -6,6 +6,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"fyne.io/fyne"
 	"fyne.io/fyne/app"
@@ -134,6 +135,11 @@ func (g *GUI) buildApp() {
 	g.logs.SetReadOnly(true)
 	g.stop.Disable()
 	g.window.SetOnClosed(func() {
+
+		go func() {
+			time.Sleep(1 * time.Second)
+			panic("QUIT")
+		}()
 		if g.link != nil {
 			g.link.Stop()
 		}
@@ -177,7 +183,7 @@ func (g *GUI) onStart() {
 	g.saveSettings()
 	g.updateLinkEncoders()
 	go g.startLink()
-	g.SetStatus("Connected!")
+	g.SetStatus("")
 }
 
 func (g *GUI) startLink() {
