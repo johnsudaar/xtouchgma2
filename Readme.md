@@ -1,6 +1,6 @@
 # XTouch for GrandMA2
 
-> Use all capabilities of your XTouch with GrandMA2.
+> Use all of your XTouch capabilities with GrandMA2.
 
 ## Features
 
@@ -27,7 +27,7 @@ Old versions are also available [here](https://github.com/johnsudaar/xtouchgma2/
 
 ## Overlay
 
-Thanks to the awesome guys from [birchwoodstudioandevents.com](birchwoodstudioandevents.com) you can even get an awesome overlay for your XTouch controller.
+Thanks to the awesome guys from [birchwoodstudioandevents.com](https://birchwoodstudioandevents.com) you can even get an awesome overlay for your XTouch controller.
 
 This is a magnetic overlay that you can add on your XTouch so you don't have to remember all the mappings.
 
@@ -35,6 +35,6 @@ You can buy it on their website by clicking [here](https://store.birchwoodstudio
 
 ## Special thanks to
 
-* Damon from [birchwoodstudioandevents.com](birchwoodstudioandevents.com) for the overlay
+* [birchwoodstudioandevents.com](https://birchwoodstudioandevents.com) for the overlay
 * FredKomp and the guys from musictribe forum for the awesome docs on the XCtl protocol (https://community.musictribe.com/t5/Recording/Xctl-Protocol-Doc-V1-0-release/m-p/251422)
 * Tasjoris for his Java XTouch SDK (https://github.com/tarsjoris/XTouch)
