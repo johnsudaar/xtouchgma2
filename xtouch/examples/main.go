@@ -9,13 +9,22 @@ import (
 )
 
 func main() {
-	server1 := xtouch.NewServer(10111)
-	defer server1.Stop()
-	err := server1.Start(context.Background())
+	ctx := context.Background()
+	server1 := xtouch.NewServer(10111, xtouch.ServerTypeXTouch)
+	server2 := xtouch.NewServer(5004, xtouch.ServerTypeXTouchExt)
+	defer server1.Stop(ctx)
+	defer server2.Stop(ctx)
+	err := server1.Start(ctx)
 	if err != nil {
 		panic(err)
 	}
-	Vegas(context.Background(), server1)
+	err = server2.Start(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	go Vegas(context.Background(), server1)
+	Vegas(context.Background(), server2)
 }
 func Vegas(ctx context.Context, server1 *xtouch.Server) {
 	go func() {
@@ -44,17 +53,7 @@ func Vegas(ctx context.Context, server1 *xtouch.Server) {
 	}()
 
 	for {
-		for i := 0; i < 8; i++ {
-			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionSelect, xtouch.ButtonStatusOn)
-			time.Sleep(25 * time.Millisecond)
-			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionMute, xtouch.ButtonStatusOn)
-			time.Sleep(25 * time.Millisecond)
-			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionSolo, xtouch.ButtonStatusOn)
-			time.Sleep(25 * time.Millisecond)
-			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionRec, xtouch.ButtonStatusOn)
-			time.Sleep(25 * time.Millisecond)
-		}
-		for button, _ := range xtouch.ButtonToNote {
+		for _, button := range server1.ButtonsSupported() {
 			server1.SetButtonStatus(ctx, button, xtouch.ButtonStatusOn)
 			time.Sleep(25 * time.Millisecond)
 		}
@@ -69,7 +68,18 @@ func Vegas(ctx context.Context, server1 *xtouch.Server) {
 			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionRec, xtouch.ButtonStatusOff)
 			time.Sleep(25 * time.Millisecond)
 		}
-		for button, _ := range xtouch.ButtonToNote {
+		for i := 0; i < 8; i++ {
+			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionSelect, xtouch.ButtonStatusOn)
+			time.Sleep(25 * time.Millisecond)
+			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionMute, xtouch.ButtonStatusOn)
+			time.Sleep(25 * time.Millisecond)
+			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionSolo, xtouch.ButtonStatusOn)
+			time.Sleep(25 * time.Millisecond)
+			server1.SetFaderButtonStatus(ctx, i, xtouch.FaderButtonPositionRec, xtouch.ButtonStatusOn)
+			time.Sleep(25 * time.Millisecond)
+		}
+
+		for _, button := range server1.ButtonsSupported() {
 			server1.SetButtonStatus(ctx, button, xtouch.ButtonStatusOff)
 			time.Sleep(25 * time.Millisecond)
 		}

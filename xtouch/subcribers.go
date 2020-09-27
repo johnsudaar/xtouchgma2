@@ -1,6 +1,10 @@
 package xtouch
 
-import "context"
+import (
+	"context"
+
+	"github.com/Scalingo/go-utils/logger"
+)
 
 type FaderChangedListener func(context.Context, FaderChangedEvent)
 type ButtonChangedListener func(context.Context, ButtonChangedEvent)
@@ -13,6 +17,8 @@ func (s *Server) SubscribeToFaderChanges(l FaderChangedListener) {
 }
 
 func (s *Server) sendFaderChange(ctx context.Context, e FaderChangedEvent) {
+	log := logger.Get(ctx)
+	log.Debug(e)
 	s.listenerLock.RLock()
 	defer s.listenerLock.RUnlock()
 	for _, l := range s.faderChangedListeners {
@@ -27,6 +33,8 @@ func (s *Server) SubscribeButtonChanges(l ButtonChangedListener) {
 }
 
 func (s *Server) sendButtonChange(ctx context.Context, e ButtonChangedEvent) {
+	log := logger.Get(ctx)
+	log.Debug(e)
 	s.listenerLock.RLock()
 	defer s.listenerLock.RUnlock()
 	for _, l := range s.buttonChangedListeners {
@@ -35,6 +43,8 @@ func (s *Server) sendButtonChange(ctx context.Context, e ButtonChangedEvent) {
 }
 
 func (s *Server) sendEncoderChangedEvent(ctx context.Context, e EncoderChangedEvent) {
+	log := logger.Get(ctx)
+	log.Debug(e)
 	s.listenerLock.RLock()
 	defer s.listenerLock.RUnlock()
 	for _, l := range s.encoderChangedListeners {

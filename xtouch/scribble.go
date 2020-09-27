@@ -30,7 +30,12 @@ func (s *Server) SetScribble(ctx context.Context, channel int, color ScribbleCol
 	}
 
 	buff := new(bytes.Buffer)
-	buff.WriteByte(0x20 + byte(channel))
+	if s.serverType == ServerTypeXTouch {
+		buff.WriteByte(0x20 + byte(channel))
+	} else if s.serverType == ServerTypeXTouchExt {
+		buff.WriteByte(byte(channel))
+	}
+
 	if secondLineInverted {
 		buff.WriteByte(byte(color) + 0x40)
 	} else {
@@ -40,7 +45,7 @@ func (s *Server) SetScribble(ctx context.Context, channel int, color ScribbleCol
 	buff.Write(toExactly7Char(line1))
 	buff.Write(toExactly7Char(line2))
 
-	err := s.SendSysExPacket(ctx, buff.Bytes())
+	err := s.transport.SendSysExPacket(ctx, buff.Bytes())
 	if err != nil {
 		return errors.Wrap(err, "fail to send scribble packet")
 	}

@@ -3,12 +3,13 @@ package xtouch
 import (
 	"context"
 
+	"github.com/johnsudaar/xtouchgma2/xtouch/transport"
 	"github.com/pkg/errors"
 )
 
 type Button string
 type ButtonStatus byte
-type FaderButtonPosition byte
+type FaderButtonPosition string
 
 const (
 	ButtonTrack  Button = "track"
@@ -135,14 +136,14 @@ const (
 	ButtonStatusOn    = 127
 	ButtonStatusBlink = 1
 
-	FaderButtonPositionSelect  = 24
-	FaderButtonPositionMute    = 16
-	FaderButtonPositionSolo    = 8
-	FaderButtonPositionRec     = 0
-	FaderButtonPositionEncoder = 32
+	FaderButtonPositionSelect  = "select"
+	FaderButtonPositionMute    = "mute"
+	FaderButtonPositionSolo    = "solo"
+	FaderButtonPositionRec     = "rec"
+	FaderButtonPositionEncoder = "encoder"
 )
 
-var buttonToNote map[Button]byte = map[Button]byte{
+var buttonToNoteXTouch map[Button]byte = map[Button]byte{
 	ButtonTrack:       40,
 	ButtonPan:         42,
 	ButtonEQ:          44,
@@ -252,17 +253,112 @@ var buttonToNote map[Button]byte = map[Button]byte{
 	ButtonRotary8: 39,
 }
 
-var noteToButton map[byte]Button
+var buttonToNoteXTouchExt map[Button]byte = map[Button]byte{
+	ButtonSelect1: 32,
+	ButtonSelect2: 33,
+	ButtonSelect3: 34,
+	ButtonSelect4: 35,
+	ButtonSelect5: 36,
+	ButtonSelect6: 37,
+	ButtonSelect7: 38,
+	ButtonSelect8: 39,
 
-func init() {
-	noteToButton = make(map[byte]Button, len(buttonToNote))
-	for button, note := range buttonToNote {
-		noteToButton[note] = button
+	ButtonMute1: 24,
+	ButtonMute2: 25,
+	ButtonMute3: 26,
+	ButtonMute4: 27,
+	ButtonMute5: 28,
+	ButtonMute6: 29,
+	ButtonMute7: 30,
+	ButtonMute8: 31,
+
+	ButtonSolo1: 16,
+	ButtonSolo2: 17,
+	ButtonSolo3: 18,
+	ButtonSolo4: 19,
+	ButtonSolo5: 20,
+	ButtonSolo6: 21,
+	ButtonSolo7: 22,
+	ButtonSolo8: 23,
+
+	ButtonRec1: 8,
+	ButtonRec2: 9,
+	ButtonRec3: 10,
+	ButtonRec4: 11,
+	ButtonRec5: 12,
+	ButtonRec6: 13,
+	ButtonRec7: 14,
+	ButtonRec8: 15,
+
+	ButtonRotary1: 0,
+	ButtonRotary2: 1,
+	ButtonRotary3: 2,
+	ButtonRotary4: 3,
+	ButtonRotary5: 4,
+	ButtonRotary6: 5,
+	ButtonRotary7: 6,
+	ButtonRotary8: 7,
+}
+
+func (s *Server) initButtons() {
+	if s.serverType == ServerTypeXTouch {
+		s.buttonToNote = buttonToNoteXTouch
+	}
+	if s.serverType == ServerTypeXTouchExt {
+		s.buttonToNote = buttonToNoteXTouchExt
+	}
+
+	s.noteToButton = make(map[byte]Button, len(s.buttonToNote))
+	for button, note := range s.buttonToNote {
+		s.noteToButton[note] = button
 	}
 }
 
+func (s *Server) ButtonsSupported() []Button {
+	buttons := make([]Button, 0)
+	for button, _ := range s.buttonToNote {
+		buttons = append(buttons, button)
+	}
+	return buttons
+}
+
+func (s *Server) toFaderButtonNote(fader int, pos FaderButtonPosition) byte {
+	if s.serverType == ServerTypeXTouch {
+		switch pos {
+		case FaderButtonPositionEncoder:
+			return byte(32 + fader)
+		case FaderButtonPositionRec:
+			return byte(0 + fader)
+		case FaderButtonPositionSolo:
+			return byte(8 + fader)
+		case FaderButtonPositionMute:
+			return byte(16 + fader)
+		case FaderButtonPositionSelect:
+			return byte(24 + fader)
+		}
+	}
+
+	if s.serverType == ServerTypeXTouchExt {
+		switch pos {
+		case FaderButtonPositionEncoder:
+			return byte(0 + fader)
+		case FaderButtonPositionRec:
+			return byte(8 + fader)
+		case FaderButtonPositionSolo:
+			return byte(16 + fader)
+		case FaderButtonPositionMute:
+			return byte(24 + fader)
+		case FaderButtonPositionSelect:
+			return byte(32 + fader)
+		}
+	}
+
+	return 0
+}
+
 func (s *Server) SetFaderButtonStatus(ctx context.Context, fader int, pos FaderButtonPosition, status ButtonStatus) error {
-	err := s.setRawButtonStatus(ctx, byte(pos)+byte(fader), status)
+	midiNote := s.toFaderButtonNote(fader, pos)
+	err := s.setRawButtonStatus(ctx, midiNote, status)
 	if err != nil {
 		return errors.Wrap(err, "fail to send faderButtonStatus")
 	}
@@ -270,7 +366,7 @@ func (s *Server) SetFaderButtonStatus(ctx context.Context, fader int, pos FaderB
 }
 
 func (s *Server) SetButtonStatus(ctx context.Context, b Button, status ButtonStatus) error {
-	err := s.setRawButtonStatus(ctx, buttonToNote[b], status)
+	err := s.setRawButtonStatus(ctx, s.buttonToNote[b], status)
 	if err != nil {
 		return errors.Wrap(err, "fail to send button status")
 	}
@@ -278,13 +374,13 @@ func (s *Server) SetButtonStatus(ctx context.Context, b Button, status ButtonSta
 }
 
 func (s *Server) setRawButtonStatus(ctx context.Context, button byte, status ButtonStatus) error {
-	midiMessage := MidiMessage{
-		Type:       MidiMessageTypeNoteOn,
+	midiMessage := transport.MidiMessage{
+		Type:       transport.MidiMessageTypeNoteOn,
 		NoteNumber: button,
 		Velocity:   byte(status),
 	}
 
-	err := s.SendMidiPacket(ctx, midiMessage)
+	err := s.transport.SendMidiPacket(ctx, midiMessage)
 	if err != nil {
 		return errors.Wrap(err, "fail to send midi message")
 	}

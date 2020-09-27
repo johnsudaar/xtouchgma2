@@ -1,4 +1,4 @@
-package xtouch
+package transport
 
 type MidiMessageType string
 

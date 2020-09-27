@@ -1,6 +1,11 @@
 package xtouch
 
-import "context"
+import (
+	"context"
+
+	"github.com/johnsudaar/xtouchgma2/xtouch/transport"
+	"github.com/pkg/errors"
+)
 
 /*
 *0*
@@ -22,18 +27,25 @@ var digitTo7Seg = []byte{
 	0b1101111,
 }
 
-func (s *Server) SetAssignement(ctx context.Context, value int) {
+func (s *Server) SetAssignement(ctx context.Context, value int) error {
 	left := (value / 10) % 10
 	right := value % 10
 
-	s.SendMidiPacket(ctx, MidiMessage{
-		Type:             MidiMessageTypeControlChange,
+	err := s.transport.SendMidiPacket(ctx, transport.MidiMessage{
+		Type:             transport.MidiMessageTypeControlChange,
 		ControllerNumber: 96,
 		ControlData:      digitTo7Seg[left],
 	})
-	s.SendMidiPacket(ctx, MidiMessage{
-		Type:             MidiMessageTypeControlChange,
+	if err != nil {
+		return errors.Wrap(err, "fail to send first assign message")
+	}
+	err = s.transport.SendMidiPacket(ctx, transport.MidiMessage{
+		Type:             transport.MidiMessageTypeControlChange,
 		ControllerNumber: 97,
 		ControlData:      digitTo7Seg[right],
 	})
+	if err != nil {
+		return errors.Wrap(err, "fail to send second assign message")
+	}
+	return nil
 }
