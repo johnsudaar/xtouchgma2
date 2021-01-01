@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Map xtouch command buttons to their DMX addresses
 var buttonMap map[xtouch.Button]int = map[xtouch.Button]int{
 	xtouch.ButtonTrack:       1,
 	xtouch.ButtonPan:         2,
@@ -63,8 +64,11 @@ var buttonMap map[xtouch.Button]int = map[xtouch.Button]int{
 	xtouch.ButtonZoom:        52,
 }
 
-func (l *Link) onButtonChange(ctx context.Context, event xtouch.ButtonChangedEvent) {
+// handle button changes on xtouches
+func (l *Link) onButtonChange(ctx context.Context, event xtouch.ButtonChangedEvent, executor int, xtouchType xtouch.ServerType) {
+	// If the button comes from the command section of the xtouch
 	if event.Type == xtouch.ButtonTypeCommand {
+		// Map the button to the DMX address
 		address, ok := buttonMap[event.Button]
 		if ok {
 			var value byte = 0
@@ -75,14 +79,16 @@ func (l *Link) onButtonChange(ctx context.Context, event xtouch.ButtonChangedEve
 			return
 		}
 
+		// if the button is the flip button consider it as the first button from the 9th executor.
 		if event.Button == xtouch.ButtonFlip {
 			l.faderLock.Lock()
 			page := l.faderPage
 			l.faderLock.Unlock()
-			l.GMA.ButtonChanged(ctx, 8, page, 0, event.Status == xtouch.ButtonStatusOn)
+			l.GMA.ButtonChanged(ctx, executor, page, 0, event.Status == xtouch.ButtonStatusOn)
 			return
 		}
 
+		// Handle the page up and page down buttons.
 		if event.Button == xtouch.ButtonFaderNext && event.Status == xtouch.ButtonStatusOn {
 			l.FaderPageUp()
 			return
@@ -92,6 +98,7 @@ func (l *Link) onButtonChange(ctx context.Context, event xtouch.ButtonChangedEve
 			return
 		}
 
+		// Channel next and previous button are used to change the rotary encoder assignations
 		if event.Button == xtouch.ButtonChannelNext && event.Status == xtouch.ButtonStatusOn {
 			l.encoderLock.Lock()
 			l.encoderAsAttributes = true
@@ -107,6 +114,7 @@ func (l *Link) onButtonChange(ctx context.Context, event xtouch.ButtonChangedEve
 		}
 	}
 
+	// If it's not a custom button, it's an executor button
 	if event.Type == xtouch.ButtonTypeSelect ||
 		event.Type == xtouch.ButtonTypeMute ||
 		event.Type == xtouch.ButtonTypeSolo ||
@@ -115,7 +123,6 @@ func (l *Link) onButtonChange(ctx context.Context, event xtouch.ButtonChangedEve
 		page := l.faderPage
 		l.faderLock.Unlock()
 
-		executor := event.Executor
 		buttonID := 0
 		if event.Type == xtouch.ButtonTypeMute {
 			buttonID = 1
@@ -123,19 +130,18 @@ func (l *Link) onButtonChange(ctx context.Context, event xtouch.ButtonChangedEve
 			buttonID = 2
 		}
 
-		if event.Type == xtouch.ButtonTypeRec {
-			executor += 100
-		}
-
 		l.GMA.ButtonChanged(ctx, executor, page, buttonID, event.Status == xtouch.ButtonStatusOn)
+		return
 	}
 
+	// If it's not a custom button nor an executor it's a rotary encoder button
 	if event.Type == xtouch.ButtonTypeRotary {
 		l.encoderLock.RLock()
 		encoderAsAttributes := l.encoderAsAttributes
 		l.encoderLock.RUnlock()
 
-		if encoderAsAttributes {
+		// If the it's an event from the XTouch and the XTouch is in attribute mode
+		if encoderAsAttributes && xtouchType == xtouch.ServerTypeXTouch {
 			if event.Status == xtouch.ButtonStatusOff {
 				return
 			}
@@ -146,41 +152,52 @@ func (l *Link) onButtonChange(ctx context.Context, event xtouch.ButtonChangedEve
 			l.faderLock.Lock()
 			page := l.faderPage
 			l.faderLock.Unlock()
-			l.GMA.ButtonChanged(ctx, 15+event.Executor, page, 0, event.Status == xtouch.ButtonStatusOn)
+			l.GMA.ButtonChanged(ctx, executor, page, 0, event.Status == xtouch.ButtonStatusOn)
 		}
 	}
 }
 
+// This method will fetch lighting informations for non executor buttons
 func (l *Link) updateButtons(ctx context.Context) error {
+	// Do not run this if there is no xtouch connected
+	mainXtouch := l.XTouches.XTouch()
+	if mainXtouch == nil {
+		return nil
+	}
+
+	// If there is an xtouch connected, start fetching and setting those lighting attributes
 	l.encoderLock.RLock()
 	encoderAsAttributes := l.encoderAsAttributes
 	l.encoderLock.RUnlock()
 
+	// Update our internal buttons lighting (prev page and encoder status, if there is a xtouch)
 	if encoderAsAttributes {
-		err := l.XTouch.SetButtonStatus(ctx, xtouch.ButtonChannelPrev, xtouch.ButtonStatusOff)
+		err := mainXtouch.SetButtonStatus(ctx, xtouch.ButtonChannelPrev, xtouch.ButtonStatusOff)
 		if err != nil {
 			return errors.Wrap(err, "fail to set channel prev status")
 		}
-		err = l.XTouch.SetButtonStatus(ctx, xtouch.ButtonChannelNext, xtouch.ButtonStatusOn)
+		err = mainXtouch.SetButtonStatus(ctx, xtouch.ButtonChannelNext, xtouch.ButtonStatusOn)
 		if err != nil {
 			return errors.Wrap(err, "fail to set channel next status")
 		}
 	} else {
-		err := l.XTouch.SetButtonStatus(ctx, xtouch.ButtonChannelPrev, xtouch.ButtonStatusOn)
+		err := mainXtouch.SetButtonStatus(ctx, xtouch.ButtonChannelPrev, xtouch.ButtonStatusOn)
 		if err != nil {
 			return errors.Wrap(err, "fail to set channel prev status")
 		}
-		err = l.XTouch.SetButtonStatus(ctx, xtouch.ButtonChannelNext, xtouch.ButtonStatusOff)
+		err = mainXtouch.SetButtonStatus(ctx, xtouch.ButtonChannelNext, xtouch.ButtonStatusOff)
 		if err != nil {
 			return errors.Wrap(err, "fail to set channel next status")
 		}
 	}
 
+	// Fetch lighting informations about some buttons
 	res, err := l.GMA.KeyStatuses("set", "edit", "clear", "solo", "high", "align")
 	if err != nil {
 		return errors.Wrap(err, "fail to get gma key statuses")
 	}
 
+	// Set those lighting informations on the xtouch button
 	for key, status := range res {
 		var button xtouch.Button
 		switch key {
@@ -207,6 +224,12 @@ func (l *Link) updateButtons(ctx context.Context) error {
 }
 
 func (l *Link) setKeyStatus(ctx context.Context, key xtouch.Button, status gma2ws.KeyStatus) error {
+	// Do not run this if there is no xtouch connected
+	mainXtouch := l.XTouches.XTouch()
+	if mainXtouch == nil {
+		return nil
+	}
+
 	var bStatus xtouch.ButtonStatus = xtouch.ButtonStatusOff
 	if status == gma2ws.KeyStatusOn {
 		bStatus = xtouch.ButtonStatusOn
@@ -215,7 +238,8 @@ func (l *Link) setKeyStatus(ctx context.Context, key xtouch.Button, status gma2w
 		bStatus = xtouch.ButtonStatusBlink
 	}
 
-	err := l.XTouch.SetButtonStatus(ctx, key, bStatus)
+	// Try to find which xtouch owns this encoder
+	err := mainXtouch.SetButtonStatus(ctx, key, bStatus)
 	if err != nil {
 		return errors.Wrap(err, "fail to send button status")
 	}

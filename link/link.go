@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/Hundemeier/go-sacn/sacn"
+	"github.com/Scalingo/go-utils/logger"
 	"github.com/johnsudaar/xtouchgma2/gma2ws"
 	"github.com/johnsudaar/xtouchgma2/xtouch"
 	"github.com/pkg/errors"
@@ -13,7 +14,7 @@ import (
 var SACN_CID = [16]byte{0x13, 0x37, 0xde, 0xad, 0xbe, 0xef}
 
 type Link struct {
-	XTouch                 *xtouch.Server
+	XTouches               XTouches
 	GMA                    *gma2ws.Client
 	SACN                   sacn.Transmitter
 	sacnDMX                chan<- [512]byte
@@ -29,8 +30,14 @@ type Link struct {
 	encoderAttributes      [8]string
 	encoderAttributesCoeff [8]int
 	encoderAsAttributes    bool
-	encoderGMAValue        [8]float64
+	encoderGMAValue        map[int]float64
 	encoderLock            *sync.RWMutex
+}
+
+type XTouchParams struct {
+	Type           xtouch.ServerType
+	Port           int
+	ExecutorOffset int
 }
 
 type NewLinkParams struct {
@@ -41,8 +48,6 @@ type NewLinkParams struct {
 }
 
 func New(params NewLinkParams) (*Link, error) {
-	xtouch := xtouch.NewServer(10111)
-
 	sacn, err := sacn.NewTransmitter("", SACN_CID, "XTOUCH_TO_GMA2")
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to send sacn informations")
@@ -54,7 +59,7 @@ func New(params NewLinkParams) (*Link, error) {
 	}
 	link := &Link{
 		GMA:                    gma2,
-		XTouch:                 xtouch,
+		XTouches:               make([]XTouch, 0),
 		SACN:                   sacn,
 		sacnUniverse:           params.SACNUniverse,
 		dmxUniverse:            [512]byte{},
@@ -67,14 +72,32 @@ func New(params NewLinkParams) (*Link, error) {
 		encoderAttributes:      [8]string{},
 		encoderAttributesCoeff: [8]int{},
 		encoderAsAttributes:    false,
+		encoderGMAValue:        make(map[int]float64),
 		encoderLock:            &sync.RWMutex{},
 	}
 
-	xtouch.SubscribeToFaderChanges(link.onFaderChangeEvent)
-	xtouch.SubscribeButtonChanges(link.onButtonChange)
-	xtouch.SubscribeEncoderChanges(link.onEncoderChangedEvent)
-
 	return link, nil
+}
+
+func (l *Link) AddXTouch(ctx context.Context, params XTouchParams) error {
+	if params.Type == xtouch.ServerTypeXTouch {
+		for _, xt := range l.XTouches {
+			if xt.xtouchType == xtouch.ServerTypeXTouch {
+				return errors.New("only one xtouch can be added")
+			}
+		}
+	}
+	server := xtouch.NewServer(params.Port, params.Type)
+	touch := XTouch{
+		server:         server,
+		xtouchType:     params.Type,
+		executorOffset: params.ExecutorOffset,
+		link:           l,
+	}
+
+	l.XTouches = append(l.XTouches, touch)
+	touch.subscribeToEventChanges()
+	return nil
 }
 
 func (l *Link) Start(ctx context.Context) error {
@@ -98,13 +121,16 @@ func (l *Link) Start(ctx context.Context) error {
 	}
 	l.gmaStop = stop
 
-	err = l.XTouch.Start(ctx)
-	if err != nil {
-		close(dmx)
-		stop()
-		l.sacnDMX = nil
-		l.stop = true
-		return errors.Wrap(err, "fail to start xtouch")
+	for _, xt := range l.XTouches {
+		err = xt.server.Start(ctx)
+		if err != nil {
+			close(dmx)
+			stop()
+			l.stopAllXTouches(ctx)
+			l.sacnDMX = nil
+			l.stop = true
+			return errors.Wrap(err, "fail to start xtouch")
+		}
 	}
 
 	go l.startDMXSync(ctx)
@@ -113,7 +139,17 @@ func (l *Link) Start(ctx context.Context) error {
 	return nil
 }
 
-func (l *Link) Stop() {
+func (l *Link) stopAllXTouches(ctx context.Context) {
+	log := logger.Get(ctx)
+	for _, xt := range l.XTouches {
+		err := xt.server.Stop(ctx)
+		if err != nil {
+			log.WithError(err).Error("fail to stop xtouch")
+		}
+	}
+}
+
+func (l *Link) Stop(ctx context.Context) {
 	l.stopLock.Lock()
 	if l.stop {
 		l.stopLock.Unlock()
@@ -126,10 +162,7 @@ func (l *Link) Stop() {
 		l.gmaStop()
 		l.gmaStop = nil
 	}
-	if l.XTouch != nil {
-		l.XTouch.Stop()
-		l.XTouch = nil
-	}
+	l.stopAllXTouches(ctx)
 
 	if l.sacnDMX != nil {
 		close(l.sacnDMX)

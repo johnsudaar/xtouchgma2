@@ -64,7 +64,7 @@ func New() *GUI {
 	gui.gMAPassword.SetPlaceHolder("john")
 	gui.sACNUniverse.SetPlaceHolder("10")
 
-	gui.buildApp()
+	gui.buildApp(context.Background())
 
 	err := gui.loadSettings()
 	if err != nil {
@@ -83,7 +83,7 @@ func New() *GUI {
 	return gui
 }
 
-func (g *GUI) buildApp() {
+func (g *GUI) buildApp(ctx context.Context) {
 	g.window.SetContent(
 		widget.NewTabContainer(
 			widget.NewTabItem(
@@ -141,7 +141,7 @@ func (g *GUI) buildApp() {
 			panic("QUIT")
 		}()
 		if g.link != nil {
-			g.link.Stop()
+			g.link.Stop(ctx)
 		}
 	})
 }
@@ -193,7 +193,7 @@ func (g *GUI) startLink() {
 		err := g.link.Start(ctx)
 		if err != nil {
 			g.SetStatus("Fail to start: " + err.Error())
-			g.link.Stop()
+			g.link.Stop(ctx)
 			g.enableInputs()
 			g.start.Enable()
 			g.stop.Disable()
@@ -218,7 +218,7 @@ func (g *GUI) enableInputs() {
 
 func (g *GUI) onStop() {
 	if g.link != nil {
-		g.link.Stop()
+		g.link.Stop(context.Background())
 	}
 	g.enableInputs()
 	g.stop.Disable()
