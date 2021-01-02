@@ -10,14 +10,14 @@ import (
 func (g *GUI) saveSettings() {
 	cfg := ini.Empty()
 	cfg.NewSection("GMA")
-	cfg.Section("GMA").NewKey("IP", g.gMAIP.Text)
-	cfg.Section("GMA").NewKey("User", g.gMAUser.Text)
-	cfg.Section("GMA").NewKey("Password", g.gMAPassword.Text)
+	cfg.Section("GMA").NewKey("IP", g.configurationTab.gMAIP.Text)
+	cfg.Section("GMA").NewKey("User", g.configurationTab.gMAUser.Text)
+	cfg.Section("GMA").NewKey("Password", g.configurationTab.gMAPassword.Text)
 	cfg.NewSection("SACN")
-	cfg.Section("SACN").NewKey("Universe", g.sACNUniverse.Text)
+	cfg.Section("SACN").NewKey("Universe", g.configurationTab.sACNUniverse.Text)
 	cfg.NewSection("ENCODERS")
 	for i := 0; i < 8; i++ {
-		cfg.Section("ENCODERS").NewKey(strconv.Itoa(i+1), g.encoderAttributes[i].Text)
+		cfg.Section("ENCODERS").NewKey(strconv.Itoa(i+1), g.encoderTab.attributes[i].Text)
 	}
 
 	err := cfg.SaveTo("xtouch2gma.ini")
@@ -32,12 +32,12 @@ func (g *GUI) loadSettings() error {
 		return errors.Wrap(err, "fail to load settings")
 	}
 
-	g.gMAIP.Text = cfg.Section("GMA").Key("IP").String()
-	g.gMAUser.Text = cfg.Section("GMA").Key("User").String()
-	g.gMAPassword.Text = cfg.Section("GMA").Key("Password").String()
-	g.sACNUniverse.Text = cfg.Section("SACN").Key("Universe").String()
+	g.configurationTab.gMAIP.Text = cfg.Section("GMA").Key("IP").String()
+	g.configurationTab.gMAUser.Text = cfg.Section("GMA").Key("User").String()
+	g.configurationTab.gMAPassword.Text = cfg.Section("GMA").Key("Password").String()
+	g.configurationTab.sACNUniverse.Text = cfg.Section("SACN").Key("Universe").String()
 	for i := 0; i < 8; i++ {
-		g.encoderAttributes[i].Text = cfg.Section("ENCODERS").Key(strconv.Itoa(i + 1)).String()
+		g.encoderTab.attributes[i].Text = cfg.Section("ENCODERS").Key(strconv.Itoa(i + 1)).String()
 	}
 
 	return nil
