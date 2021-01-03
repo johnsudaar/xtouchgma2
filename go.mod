@@ -3,10 +3,12 @@ module github.com/johnsudaar/xtouchgma2
 go 1.13
 
 require (
-	fyne.io/fyne v1.2.4
+	fyne.io/fyne v1.4.2
 	github.com/Hundemeier/go-sacn/sacn v0.0.0-20191003133642-c4680a71fa22
 	github.com/Scalingo/go-utils v6.5.0+incompatible
 	github.com/gdamore/tcell v1.3.0
+	github.com/go-gl/glfw v0.0.0-20181213070059-819e8ce5125f // indirect
+	github.com/gofrs/uuid v4.0.0+incompatible
 	github.com/gorilla/websocket v1.4.2
 	github.com/pkg/errors v0.9.1
 	github.com/rivo/tview v0.0.0-20200414130344-8e06c826b3a5

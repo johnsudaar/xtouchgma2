@@ -41,6 +41,12 @@ func (x XTouch) onFaderChange(ctx context.Context, e xtouch.FaderChangedEvent) {
 func (x XTouch) onButtonChange(ctx context.Context, e xtouch.ButtonChangedEvent) {
 	// Translate the executor offset to the global GMA offset
 	executor := ButtonsStartOffset + e.Executor + x.executorOffset
+	// If we pressed a button linked to a fader
+	if e.Type == xtouch.ButtonTypeSelect ||
+		e.Type == xtouch.ButtonTypeMute ||
+		e.Type == xtouch.ButtonTypeSolo {
+		executor = FadersStartOffset + e.Executor + x.executorOffset
+	}
 	// If we pressed a retorary encoder modify the global GMA offset
 	if e.Type == xtouch.ButtonTypeRotary {
 		executor = RotaryEncoderStartOffset + e.Executor + x.executorOffset

@@ -69,7 +69,7 @@ func (s *Server) dispatchMidiMessage(ctx context.Context, message transport.Midi
 			s.handleRotaryControlChange(ctx, message)
 		}
 
-		if s.serverType == ServerTypeXTouchExt && message.ControllerNumber >= 70 && message.ControllerNumber <= 87 {
+		if s.serverType == ServerTypeXTouchExt && message.ControllerNumber >= 70 && message.ControllerNumber <= 77 {
 			s.sendFaderChange(ctx, FaderChangedEvent{
 				Fader:       int(message.ControllerNumber - 70),
 				PositionRaw: uint16(message.ControlData),
