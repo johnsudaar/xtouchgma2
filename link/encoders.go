@@ -24,7 +24,7 @@ func (l *Link) UseEncoderAsAttributes(v bool) {
 	l.encoderAsAttributes = v
 }
 
-func (l *Link) onEncoderChangedEvent(ctx context.Context, e xtouch.EncoderChangedEvent) {
+func (l *Link) onEncoderChangedEvent(ctx context.Context, e xtouch.EncoderChangedEvent, xtouchType xtouch.ServerType, offset int) {
 	if e.Delta == 0 {
 		return
 	}
@@ -32,30 +32,40 @@ func (l *Link) onEncoderChangedEvent(ctx context.Context, e xtouch.EncoderChange
 	encoderAsAttributes := l.encoderAsAttributes
 	l.encoderLock.RUnlock()
 
-	if e.Encoder == xtouch.MainEncoder || encoderAsAttributes {
+	if e.Encoder == xtouch.MainEncoder || (encoderAsAttributes && xtouchType == xtouch.ServerTypeXTouch) {
 		l.updateEncoderAttribute(ctx, e)
 	} else {
-		l.updateEncoderFader(ctx, e)
+		l.updateEncoderFader(ctx, e, offset)
 	}
 
 }
 
 func (l *Link) updateEncoderRings(ctx context.Context) error {
+	// Try to find the main XTouch
+	mainXtouch := l.XTouches.XTouch()
+	if mainXtouch == nil {
+		// If there is no main XTouch => No need to update the encoder ring
+		return nil
+	}
+
 	l.encoderLock.RLock()
 	encoderAsAttributes := l.encoderAsAttributes
 	encoderAttributes := l.encoderAttributes
 	encoderAttributesCoeff := l.encoderAttributesCoeff
 	l.encoderLock.RUnlock()
 
+	// If we're not using the encoder as attributes
 	if !encoderAsAttributes {
+		// exit, no need to do anything there
 		return nil
 	}
 
+	// Set the 8 encoder values
 	for i := 0; i < 8; i++ {
 		if encoderAttributes[i] == "" {
-			l.XTouch.SetRingPosition(ctx, i, 0)
+			mainXtouch.SetRingPosition(ctx, i, 0)
 		} else {
-			l.XTouch.SetRingPosition(ctx, i, encodersCoeff[encoderAttributesCoeff[i]]/encodersCoeffMax)
+			mainXtouch.SetRingPosition(ctx, i, encodersCoeff[encoderAttributesCoeff[i]]/encodersCoeffMax)
 		}
 	}
 	return nil
@@ -92,16 +102,16 @@ func (l *Link) updateEncoderAttribute(ctx context.Context, e xtouch.EncoderChang
 	}
 }
 
-func (l *Link) updateEncoderFader(ctx context.Context, e xtouch.EncoderChangedEvent) {
+func (l *Link) updateEncoderFader(ctx context.Context, e xtouch.EncoderChangedEvent, offset int) {
 	l.faderLock.Lock()
 	page := l.faderPage
 	l.faderLock.Unlock()
 
 	l.encoderLock.Lock()
-	value := l.encoderGMAValue[e.Encoder]
+	value := l.encoderGMAValue[offset]
 	value += float64(e.Delta) * 0.01
-	l.encoderGMAValue[e.Encoder] = value
+	l.encoderGMAValue[offset] = value
 	defer l.encoderLock.Unlock()
 
-	l.GMA.FaderChanged(ctx, int(e.Encoder)+15, page, value)
+	l.GMA.FaderChanged(ctx, offset, page, value)
 }

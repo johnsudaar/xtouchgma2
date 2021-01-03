@@ -18,7 +18,7 @@ func (l *Link) startEventLoop(ctx context.Context) {
 			log.Info("Stop main event loop")
 			return
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		err := l.faderGmaToXtouch(ctx)
 		if err != nil {
 			log.WithError(err).Error("fail to sync faders")
