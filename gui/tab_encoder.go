@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"fyne.io/fyne/container"
 	"fyne.io/fyne/widget"
 )
 
@@ -23,10 +24,14 @@ func NewEncoderTab(gui *GUI) *EncoderTab {
 	return &tab
 }
 
-func (g *EncoderTab) getTabItem() *widget.TabItem {
-	return widget.NewTabItem(
+func (g *EncoderTab) onWindowsInit() {
+	g.disableUpdate()
+}
+
+func (g *EncoderTab) getTabItem() *container.TabItem {
+	return container.NewTabItem(
 		"Encoders",
-		widget.NewVBox(
+		container.NewVBox(
 			widget.NewForm(
 				widget.NewFormItem("Encoder 1 attribute: ", g.attributes[0]),
 				widget.NewFormItem("Encoder 2 attribute: ", g.attributes[1]),
@@ -40,6 +45,14 @@ func (g *EncoderTab) getTabItem() *widget.TabItem {
 			g.updateBtn,
 		),
 	)
+}
+
+func (t *EncoderTab) disableUpdate() {
+	t.updateBtn.Disable()
+}
+
+func (t *EncoderTab) enableUpdate() {
+	t.updateBtn.Enable()
 }
 
 func (t *EncoderTab) onUpdate() {

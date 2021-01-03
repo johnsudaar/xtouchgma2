@@ -6,6 +6,7 @@ import (
 
 	"fyne.io/fyne"
 	"fyne.io/fyne/app"
+	"fyne.io/fyne/container"
 	"fyne.io/fyne/widget"
 	"github.com/johnsudaar/xtouchgma2/link"
 )
@@ -50,7 +51,7 @@ func New() *GUI {
 
 func (g *GUI) buildApp(ctx context.Context) {
 	g.window.SetContent(
-		widget.NewTabContainer(
+		container.NewAppTabs(
 			g.configurationTab.getTabItem(),
 			g.encoderTab.getTabItem(),
 		),
@@ -67,18 +68,25 @@ func (g *GUI) buildApp(ctx context.Context) {
 	})
 
 	g.configurationTab.onWindowsInit()
+	g.encoderTab.onWindowsInit()
 }
 
 func (g *GUI) startRequested() {
 	g.configurationTab.disableInputs()
 	g.configurationTab.disableStart()
+	g.encoderTab.enableUpdate()
 	g.SetStatus("Connecting")
 
 	link, err := link.New(g.configurationTab.linkParams())
 
+	for _, xt := range g.configurationTab.xTouches {
+		link.AddXTouch(context.Background(), xt.toParams())
+	}
+
 	if err != nil {
 		g.configurationTab.enableInputs()
 		g.configurationTab.enableStart()
+		g.encoderTab.enableUpdate()
 		g.SetStatus("Fail to init: " + err.Error())
 		return
 	}
@@ -98,5 +106,6 @@ func (g *GUI) stopRequested() {
 	g.configurationTab.enableInputs()
 	g.configurationTab.disableStop()
 	g.configurationTab.enableStart()
+	g.encoderTab.disableUpdate()
 	g.SetStatus("stopped")
 }
