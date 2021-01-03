@@ -16,13 +16,6 @@ const (
 	TypeXTouchExtender = "XTouch Extender"
 )
 
-// TODO:
-// - Check that the executor offset is valid => Done
-// - Check that only one XTouch is added => Done
-// - Generate the ports
-// - Load and save to config
-// - Add it to the link
-
 type XTouchConfig struct {
 	card             *widget.Card
 	xtouchType       *widget.Select
