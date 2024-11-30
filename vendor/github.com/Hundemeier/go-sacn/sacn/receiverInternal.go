@@ -2,11 +2,12 @@ package sacn
 
 import (
 	"bytes"
+	"fmt"
 	"time"
 )
 
-//the listener is responsible for listening on the UDP socket and parsing the incoming data.
-//It dispatches the received packets to the corresponding handlers.
+// the listener is responsible for listening on the UDP socket and parsing the incoming data.
+// It dispatches the received packets to the corresponding handlers.
 func (r *ReceiverSocket) startListener() {
 	go func() {
 		buf := make([]byte, 638)
@@ -18,7 +19,10 @@ func (r *ReceiverSocket) startListener() {
 			default:
 			}
 
-			r.socket.SetDeadline(time.Now().Add(time.Millisecond * timeoutMs))
+			err := r.socket.SetDeadline(time.Now().Add(time.Millisecond * timeoutMs))
+			if err != nil {
+				panic(fmt.Sprintf("could not set deadline on socket: %v", err))
+			}
 			n, _, addr, _ := r.socket.ReadFrom(buf) //n, ControlMessage, addr, err
 			if addr == nil {                        //Check if we had a timeout
 				//that means we did not receive a packet in 2,5s at all
@@ -36,7 +40,7 @@ func (r *ReceiverSocket) startListener() {
 	}()
 }
 
-//the handler is responsible for checking all necessary things to decide if callbacks should be invoked
+// the handler is responsible for checking all necessary things to decide if callbacks should be invoked
 func (r *ReceiverSocket) handle(p DataPacket) {
 	r.checkForTimeouts()
 	//check if we had a change in priority to the last data we received on the universe
@@ -77,7 +81,7 @@ func (r *ReceiverSocket) handle(p DataPacket) {
 	}
 }
 
-//invokeCallback calls the callback if it is present.
+// invokeCallback calls the callback if it is present.
 func (r *ReceiverSocket) invokeCallback(new DataPacket) {
 	oldData, ok := r.lastDatas[new.Universe()]
 	var old DataPacket
@@ -91,7 +95,7 @@ func (r *ReceiverSocket) invokeCallback(new DataPacket) {
 	}
 }
 
-//storeLastPacket stores the packet in the lastDatas store
+// storeLastPacket stores the packet in the lastDatas store
 func (r *ReceiverSocket) storeLastPacket(p DataPacket) {
 	r.lastDatas[p.Universe()] = lastData{
 		lastPacket: p.copy(),
@@ -100,7 +104,7 @@ func (r *ReceiverSocket) storeLastPacket(p DataPacket) {
 	r.timeoutCalled[p.Universe()] = false
 }
 
-//checkForTimeouts checks all last data if a universe had a timeout. Calls the timeoutCallback.
+// checkForTimeouts checks all last data if a universe had a timeout. Calls the timeoutCallback.
 func (r *ReceiverSocket) checkForTimeouts() {
 	for univ, last := range r.lastDatas {
 		if time.Since(last.lastTime) > time.Millisecond*timeoutMs {

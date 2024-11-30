@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -13,8 +14,9 @@ import (
 // SettingsSchema is used for loading and storing global settings
 type SettingsSchema struct {
 	// these items are used for global settings load
-	ThemeName string  `json:"theme"`
-	Scale     float32 `json:"scale"`
+	ThemeName    string  `json:"theme"`
+	Scale        float32 `json:"scale"`
+	PrimaryColor string  `json:"primary_color"`
 }
 
 // StoragePath returns the location of the settings storage
@@ -26,7 +28,7 @@ func (sc *SettingsSchema) StoragePath() string {
 var _ fyne.Settings = (*settings)(nil)
 
 type settings struct {
-	themeLock      sync.RWMutex
+	propertyLock   sync.RWMutex
 	theme          fyne.Theme
 	themeSpecified bool
 
@@ -37,9 +39,28 @@ type settings struct {
 	schema SettingsSchema
 }
 
+func (s *settings) BuildType() fyne.BuildType {
+	return buildMode
+}
+
+func (s *settings) PrimaryColor() string {
+	s.propertyLock.RLock()
+	defer s.propertyLock.RUnlock()
+	return s.schema.PrimaryColor
+}
+
+// OverrideTheme allows the settings app to temporarily preview different theme details.
+// Please make sure that you remember the original settings and call this again to revert the change.
+func (s *settings) OverrideTheme(theme fyne.Theme, name string) {
+	s.propertyLock.Lock()
+	defer s.propertyLock.Unlock()
+	s.schema.PrimaryColor = name
+	s.theme = theme
+}
+
 func (s *settings) Theme() fyne.Theme {
-	s.themeLock.RLock()
-	defer s.themeLock.RUnlock()
+	s.propertyLock.RLock()
+	defer s.propertyLock.RUnlock()
 	return s.theme
 }
 
@@ -49,15 +70,15 @@ func (s *settings) SetTheme(theme fyne.Theme) {
 }
 
 func (s *settings) applyTheme(theme fyne.Theme) {
-	s.themeLock.Lock()
-	defer s.themeLock.Unlock()
+	s.propertyLock.Lock()
+	defer s.propertyLock.Unlock()
 	s.theme = theme
 	s.apply()
 }
 
 func (s *settings) Scale() float32 {
-	s.themeLock.RLock()
-	defer s.themeLock.RUnlock()
+	s.propertyLock.RLock()
+	defer s.propertyLock.RUnlock()
 	return s.schema.Scale
 }
 
@@ -83,7 +104,7 @@ func (s *settings) apply() {
 
 func (s *settings) load() {
 	err := s.loadFromFile(s.schema.StoragePath())
-	if err != nil {
+	if err != nil && err != io.EOF { // we can get an EOF in windows settings writes
 		fyne.LogError("Settings load error:", err)
 	}
 
@@ -91,7 +112,7 @@ func (s *settings) load() {
 }
 
 func (s *settings) loadFromFile(path string) error {
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil

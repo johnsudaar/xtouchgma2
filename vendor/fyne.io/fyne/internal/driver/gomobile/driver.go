@@ -1,19 +1,9 @@
 package gomobile
 
 import (
-	"fmt"
 	"runtime"
 	"strconv"
 	"time"
-
-	"fyne.io/fyne"
-	"fyne.io/fyne/canvas"
-	"fyne.io/fyne/internal"
-	"fyne.io/fyne/internal/driver"
-	"fyne.io/fyne/internal/painter"
-	pgl "fyne.io/fyne/internal/painter/gl"
-	"fyne.io/fyne/theme"
-	"fyne.io/fyne/widget"
 
 	"github.com/fyne-io/mobile/app"
 	"github.com/fyne-io/mobile/event/key"
@@ -22,6 +12,14 @@ import (
 	"github.com/fyne-io/mobile/event/size"
 	"github.com/fyne-io/mobile/event/touch"
 	"github.com/fyne-io/mobile/gl"
+
+	"fyne.io/fyne"
+	"fyne.io/fyne/canvas"
+	"fyne.io/fyne/internal"
+	"fyne.io/fyne/internal/driver"
+	"fyne.io/fyne/internal/painter"
+	pgl "fyne.io/fyne/internal/painter/gl"
+	"fyne.io/fyne/theme"
 )
 
 const tapSecondaryDelay = 300 * time.Millisecond
@@ -77,18 +75,13 @@ func (d *mobileDriver) CanvasForObject(fyne.CanvasObject) fyne.Canvas {
 }
 
 func (d *mobileDriver) AbsolutePositionForObject(co fyne.CanvasObject) fyne.Position {
-	var pos fyne.Position
-	c := fyne.CurrentApp().Driver().CanvasForObject(co).(*mobileCanvas)
+	c := d.CanvasForObject(co)
+	if c == nil {
+		return fyne.NewPos(0, 0)
+	}
 
-	c.walkTree(func(o fyne.CanvasObject, p fyne.Position, _ fyne.Position, _ fyne.Size) bool {
-		if o == co {
-			pos = p
-			return true
-		}
-		return false
-	}, nil)
-
-	return pos
+	mc := c.(*mobileCanvas)
+	return driver.AbsolutePositionForObject(co, mc.objectTrees())
 }
 
 func (d *mobileDriver) Quit() {
@@ -131,10 +124,10 @@ func (d *mobileDriver) Run() {
 				currentDPI = e.PixelsPerPt * 72
 
 				dev := d.device
-				dev.insetTop = e.InsetTopPx
-				dev.insetBottom = e.InsetBottomPx
-				dev.insetLeft = e.InsetLeftPx
-				dev.insetRight = e.InsetRightPx
+				dev.safeTop = e.InsetTopPx
+				dev.safeLeft = e.InsetLeftPx
+				dev.safeHeight = e.HeightPx - e.InsetTopPx - e.InsetBottomPx
+				dev.safeWidth = e.WidthPx - e.InsetLeftPx - e.InsetRightPx
 				canvas.SetScale(0) // value is ignored
 
 				// make sure that we paint on the next frame
@@ -149,13 +142,18 @@ func (d *mobileDriver) Run() {
 				}
 
 				if d.freeDirtyTextures(canvas) {
-					d.paintWindow(current, currentSize)
-					a.Publish()
+					newSize := fyne.NewSize(int(float32(currentSize.WidthPx)/canvas.scale), int(float32(currentSize.HeightPx)/canvas.scale))
 
-					err := d.glctx.GetError()
-					if err != 0 {
-						fyne.LogError(fmt.Sprintf("OpenGL Error: %d", err), nil)
+					if canvas.minSizeChanged() {
+						canvas.ensureMinSize()
+
+						canvas.sizeContent(newSize) // force resize of content
+					} else { // if screen changed
+						current.Resize(newSize)
 					}
+
+					d.paintWindow(current, newSize)
+					a.Publish()
 				}
 
 				time.Sleep(time.Millisecond * 10)
@@ -186,7 +184,8 @@ func (d *mobileDriver) onStart() {
 func (d *mobileDriver) onStop() {
 }
 
-func (d *mobileDriver) paintWindow(window fyne.Window, sz size.Event) {
+func (d *mobileDriver) paintWindow(window fyne.Window, size fyne.Size) {
+	clips := &internal.ClipStack{}
 	canvas := window.Canvas().(*mobileCanvas)
 
 	r, g, b, a := theme.BackgroundColor().RGBA()
@@ -194,23 +193,21 @@ func (d *mobileDriver) paintWindow(window fyne.Window, sz size.Event) {
 	d.glctx.ClearColor(float32(r)/max16bit, float32(g)/max16bit, float32(b)/max16bit, float32(a)/max16bit)
 	d.glctx.Clear(gl.COLOR_BUFFER_BIT)
 
-	newSize := fyne.NewSize(int(float32(sz.WidthPx)/canvas.scale), int(float32(sz.HeightPx)/canvas.scale))
-	window.Resize(newSize)
-
 	paint := func(obj fyne.CanvasObject, pos fyne.Position, _ fyne.Position, _ fyne.Size) bool {
-		// TODO should this be somehow not scroll container specific?
-		if _, ok := obj.(*widget.ScrollContainer); ok {
-			canvas.painter.StartClipping(
-				fyne.NewPos(pos.X, canvas.Size().Height-pos.Y-obj.Size().Height),
-				obj.Size(),
-			)
+		if _, ok := obj.(fyne.Scrollable); ok {
+			inner := clips.Push(pos, obj.Size())
+			canvas.painter.StartClipping(inner.Rect())
 		}
-		canvas.painter.Paint(obj, pos, newSize)
+		canvas.painter.Paint(obj, pos, size)
 		return false
 	}
 	afterPaint := func(obj, _ fyne.CanvasObject) {
-		if _, ok := obj.(*widget.ScrollContainer); ok {
+		if _, ok := obj.(fyne.Scrollable); ok {
 			canvas.painter.StopClipping()
+			clips.Pop()
+			if top := clips.Top(); top != nil {
+				canvas.painter.StartClipping(top.Rect())
+			}
 		}
 	}
 
@@ -242,8 +239,10 @@ func (d *mobileDriver) tapUpCanvas(canvas *mobileCanvas, x, y float32, tapID tou
 
 	canvas.tapUp(pos, int(tapID), func(wid fyne.Tappable, ev *fyne.PointEvent) {
 		go wid.Tapped(ev)
-	}, func(wid fyne.Tappable, ev *fyne.PointEvent) {
+	}, func(wid fyne.SecondaryTappable, ev *fyne.PointEvent) {
 		go wid.TappedSecondary(ev)
+	}, func(wid fyne.DoubleTappable, ev *fyne.PointEvent) {
+		go wid.DoubleTapped(ev)
 	}, func(wid fyne.Draggable, ev *fyne.DragEvent) {
 		go wid.DragEnd()
 	})
