@@ -40,7 +40,7 @@ type XTouchFader struct {
 	ButtonC  *Refresher[xtouch.ButtonStatus]
 }
 
-func NewXTouch(server *xtouch.Server, xtouchType xtouch.ServerType, executorOffset int, link *Link) *XTouch {
+func NewXTouch(server *xtouch.Server, xtouchType xtouch.ServerType, executorOffset int, link *Link, params RefreshParams) *XTouch {
 	xt := XTouch{
 		Server:         server,
 		xtouchType:     xtouchType,
@@ -51,14 +51,14 @@ func NewXTouch(server *xtouch.Server, xtouchType xtouch.ServerType, executorOffs
 	xt.Faders = make([]XTouchFader, xt.size())
 	for i := 0; i < xt.size(); i++ {
 		fader := XTouchFader{
-			Fader:   NewRefresher("fader", xt.faderRefreshFunc(i)),
-			ButtonA: NewRefresher("button_select", xt.buttonRefreshFunc(i, xtouch.FaderButtonPositionSelect)),
+			Fader:   NewRefresher("fader", params, xt.faderRefreshFunc(i)),
+			ButtonA: NewRefresher("button_select", params, xt.buttonRefreshFunc(i, xtouch.FaderButtonPositionSelect)),
 		}
 
 		if i != 8 { // The main fader doesn't have a button
-			fader.Scribble = NewRefresher("scribble", xt.scribbleRefreshFunc(i))
-			fader.ButtonB = NewRefresher("button_mute", xt.buttonRefreshFunc(i, xtouch.FaderButtonPositionMute))
-			fader.ButtonC = NewRefresher("button_solo", xt.buttonRefreshFunc(i, xtouch.FaderButtonPositionSolo))
+			fader.Scribble = NewRefresher("scribble", params, xt.scribbleRefreshFunc(i))
+			fader.ButtonB = NewRefresher("button_mute", params, xt.buttonRefreshFunc(i, xtouch.FaderButtonPositionMute))
+			fader.ButtonC = NewRefresher("button_solo", params, xt.buttonRefreshFunc(i, xtouch.FaderButtonPositionSolo))
 		}
 		xt.Faders[i] = fader
 	}
@@ -66,12 +66,12 @@ func NewXTouch(server *xtouch.Server, xtouchType xtouch.ServerType, executorOffs
 	xt.Buttons = make([]*Refresher[xtouch.ButtonStatus], 8)
 	xt.RotaryEncoder = make([]*Refresher[float64], 8)
 	for i := 0; i < 8; i++ {
-		xt.Buttons[i] = NewRefresher("button", xt.buttonRefreshFunc(i, xtouch.FaderButtonPositionRec))
-		xt.RotaryEncoder[i] = NewRefresher("rotary_encoder", xt.rotaryRingRefreshFunc(i))
+		xt.Buttons[i] = NewRefresher("button", params, xt.buttonRefreshFunc(i, xtouch.FaderButtonPositionRec))
+		xt.RotaryEncoder[i] = NewRefresher("rotary_encoder", params, xt.rotaryRingRefreshFunc(i))
 	}
 
 	if xtouchType == xtouch.ServerTypeXTouch {
-		xt.Assignment = NewRefresher("assignment", func(ctx context.Context, value int) error {
+		xt.Assignment = NewRefresher("assignment", params, func(ctx context.Context, value int) error {
 			return xt.Server.SetAssignement(ctx, value)
 		})
 	}

@@ -19,6 +19,8 @@ const (
 type Refresher[T any] struct {
 	id string
 
+	params RefreshParams
+
 	changedAt time.Time
 
 	lastRefreshedAt time.Time
@@ -31,9 +33,16 @@ type Refresher[T any] struct {
 	lock *sync.Mutex
 }
 
-func NewRefresher[T any](id string, refreshFunc func(context.Context, T) error) *Refresher[T] {
+type RefreshParams struct {
+	MinRefreshInterval time.Duration
+	MaxRefreshInterval time.Duration
+	InhibitTime        time.Duration
+}
+
+func NewRefresher[T any](id string, params RefreshParams, refreshFunc func(context.Context, T) error) *Refresher[T] {
 	return &Refresher[T]{
-		id: id,
+		id:     id,
+		params: params,
 
 		refreshFunc: refreshFunc,
 		lock:        &sync.Mutex{},
@@ -50,7 +59,7 @@ func (r *Refresher[T]) Refresh(ctx context.Context) {
 		return
 	}
 
-	if time.Since(r.inhibitedAt) < inhibitInterval {
+	if time.Since(r.inhibitedAt) < r.params.InhibitTime {
 		log.Debug("Refresh inhibited")
 		return
 	}
@@ -65,7 +74,7 @@ func (r *Refresher[T]) Refresh(ctx context.Context) {
 		return
 	}
 
-	randInterval := rand.Int63n(int64(refreshMaxInterval-refreshMinInterval)) + int64(refreshMinInterval)
+	randInterval := rand.Int63n(int64(r.params.MaxRefreshInterval-r.params.MinRefreshInterval)) + int64(r.params.MinRefreshInterval)
 	if time.Since(r.lastRefreshedAt) < time.Duration(randInterval) {
 		log.Debug("Refresh interval not reached")
 		return

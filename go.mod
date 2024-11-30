@@ -10,6 +10,7 @@ require (
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/gorilla/websocket v1.5.3
 	github.com/pkg/errors v0.9.1
+	github.com/rifflock/lfshook v0.0.0-20180920164130-b9218ef580f5
 	github.com/rivo/tview v0.0.0-20200414130344-8e06c826b3a5
 	github.com/sirupsen/logrus v1.9.3
 	gopkg.in/ini.v1 v1.67.0

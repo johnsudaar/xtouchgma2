@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"time"
 
 	"fyne.io/fyne"
 	"fyne.io/fyne/container"
@@ -81,7 +82,7 @@ func (g *ConfigurationTab) onWindowsInit() {
 	g.gMAUser.SetPlaceHolder("user")
 	g.gMAPassword.SetPlaceHolder("password")
 	g.sACNUniverse.SetPlaceHolder("10")
-	g.logs.SetReadOnly(true)
+	g.logs.Disable()
 	g.stop.Disable()
 }
 
@@ -169,11 +170,20 @@ func (g *ConfigurationTab) enableStop() {
 func (g *ConfigurationTab) linkParams() link.NewLinkParams {
 	u, _ := strconv.Atoi(g.sACNUniverse.Text)
 
+	eventLoopRefreshRate, _ := time.ParseDuration(g.gui.settingsTab.eventLoopRefreshRate.Text)
+	inputInhibitTime, _ := time.ParseDuration(g.gui.settingsTab.inputInhibitTime.Text)
+	xtouchMinRefreshRate, _ := time.ParseDuration(g.gui.settingsTab.xtouchMinRefreshRate.Text)
+	xtouchMaxRefreshRate, _ := time.ParseDuration(g.gui.settingsTab.xtouchMaxRefreshRate.Text)
+
 	return link.NewLinkParams{
-		GMAHost:      g.gMAIP.Text,
-		GMAUser:      g.gMAUser.Text,
-		GMAPassword:  g.gMAPassword.Text,
-		SACNUniverse: uint16(u),
+		GMAHost:              g.gMAIP.Text,
+		GMAUser:              g.gMAUser.Text,
+		GMAPassword:          g.gMAPassword.Text,
+		SACNUniverse:         uint16(u),
+		EventLoopRefreshRate: eventLoopRefreshRate,
+		InputInhibitTime:     inputInhibitTime,
+		XTouchMinRefreshRate: xtouchMinRefreshRate,
+		XTouchMaxRefreshRate: xtouchMaxRefreshRate,
 	}
 }
 
@@ -241,6 +251,30 @@ func (g *ConfigurationTab) validInputs() bool {
 	_, err := strconv.Atoi(g.sACNUniverse.Text)
 	if err != nil {
 		g.formErrors.Text = fmt.Sprintf("sACNUniverse: %s is not a number", g.sACNUniverse.Text)
+		return false
+	}
+
+	_, err = time.ParseDuration(g.gui.settingsTab.eventLoopRefreshRate.Text)
+	if err != nil {
+		g.formErrors.Text = fmt.Sprintf("EventLoopRefreshRate: %s is not a valid duration", g.gui.settingsTab.eventLoopRefreshRate.Text)
+		return false
+	}
+
+	_, err = time.ParseDuration(g.gui.settingsTab.inputInhibitTime.Text)
+	if err != nil {
+		g.formErrors.Text = fmt.Sprintf("InputInhibitTime: %s is not a valid duration", g.gui.settingsTab.inputInhibitTime.Text)
+		return false
+	}
+
+	_, err = time.ParseDuration(g.gui.settingsTab.xtouchMinRefreshRate.Text)
+	if err != nil {
+		g.formErrors.Text = fmt.Sprintf("XTouchMinRefreshRate: %s is not a valid duration", g.gui.settingsTab.xtouchMinRefreshRate.Text)
+		return false
+	}
+
+	_, err = time.ParseDuration(g.gui.settingsTab.xtouchMaxRefreshRate.Text)
+	if err != nil {
+		g.formErrors.Text = fmt.Sprintf("XTouchMaxRefreshRate: %s is not a valid duration", g.gui.settingsTab.xtouchMaxRefreshRate.Text)
 		return false
 	}
 
