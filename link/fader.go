@@ -27,17 +27,17 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 	}
 
 	playbacks, err := l.GMA.Playbacks(page, []gma2ws.PlaybacksRange{
-		gma2ws.PlaybacksRange{
+		{
 			Index:    FadersStartOffset + executorStartOffset,
 			Count:    executorBankSize,
 			ItemType: gma2ws.PlaybacksItemTypeFader,
 		},
-		gma2ws.PlaybacksRange{
+		{
 			Index:    RotaryEncoderStartOffset + executorStartOffset,
 			Count:    executorBankSize,
 			ItemType: gma2ws.PlaybacksItemTypeFader,
 		},
-		gma2ws.PlaybacksRange{
+		{
 			Index:    ButtonsStartOffset + executorStartOffset,
 			Count:    executorBankSize,
 			ItemType: gma2ws.PlaybacksItemTypeButton,
@@ -64,7 +64,8 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 
 		// Set the fader position
 		for pos, block := range executor.ExecutorBlocks {
-			found, xt, offset := l.XTouches.findExecutor(i + pos)
+			fader, found := l.XTouches.findFader(i + pos)
+			// found, xt, offset := l.XTouches.findExecutor(i + pos)
 			// If the executor has not been found in our xtouch configuration
 			if !found {
 				continue
@@ -75,13 +76,10 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 			if f.Max != 0 {
 				value = float64(f.Value) / float64(f.Max-f.Min)
 			}
-			err := xt.server.SetFaderPos(ctx, offset, value)
-			if err != nil {
-				log.WithError(err).Error("fail to send fader to its position")
-			}
+			fader.Fader.Set(value)
 
 			// If we're on the last fader of the XTouch
-			if offset == 8 {
+			if fader.Scribble == nil {
 				// Do not try to update the text
 				continue
 			}
@@ -104,20 +102,20 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 				color = xtouch.ScribbleColorWhite
 			}
 
-			err = xt.server.SetScribble(ctx, offset, color, true, strings.TrimSpace(line1), strings.TrimSpace(line2))
-			if err != nil {
-				log.WithError(err).Error("fail to send scribble data")
-			}
+			fader.Scribble.Set(ScribbleValue{
+				Line1:              strings.TrimSpace(line1),
+				Line2:              strings.TrimSpace(line2),
+				Color:              color,
+				SecondLineInverted: true,
+			})
 
 			// Set the button light
 			var buttonStatus xtouch.ButtonStatus = xtouch.ButtonStatusOff
 			if executor.IsRun != 0 {
 				buttonStatus = xtouch.ButtonStatusOn
 			}
-			err = xt.server.SetFaderButtonStatus(ctx, offset, xtouch.FaderButtonPositionSelect, buttonStatus)
-			if err != nil {
-				return errors.Wrap(err, "fail to change button status")
-			}
+
+			fader.ButtonA.Set(buttonStatus)
 		}
 		// if there is more than one executor block on this executor, increment i
 		if len(executor.ExecutorBlocks) > 0 {
@@ -139,14 +137,9 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 		executor := playbacks[1].Items[i/5][posInBlock]
 		for pos, block := range executor.ExecutorBlocks {
 			// Find the executor in our xtouch configuration
-			found, xt, offset := l.XTouches.findExecutor(i + pos)
+			encoder, xtc, found := l.XTouches.RotaryEncoder(i + pos)
 			// If the executor has not been found in our xtouch configuration
 			if !found {
-				continue
-			}
-
-			// If we're on the XTouch we return 9 executor but there's only 8 rotary encoder so skip this one
-			if offset == 8 {
 				continue
 			}
 
@@ -157,11 +150,12 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 			}
 			l.encoderGMAValue[i] = value
 			// If we are using the encoders in attribute mode and we're on the xtouch do not copy the encoder status to the rotary encoders
-			if l.encoderAsAttributes && xt.xtouchType == xtouch.ServerTypeXTouch {
+			if l.encoderAsAttributes && xtc.xtouchType == xtouch.ServerTypeXTouch {
 				continue
 			}
+
 			// Set the xtouch value
-			xt.server.SetRingPosition(ctx, offset, value)
+			encoder.Set(value)
 		}
 		if len(executor.ExecutorBlocks) > 0 {
 			i += len(executor.ExecutorBlocks) - 1
@@ -179,14 +173,9 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 		executor := playbacks[2].Items[i/5][posInBlock]
 		for pos := 0; pos < executor.CombinedItems; pos++ {
 			// Find the executor in our xtouch configuration
-			found, xt, offset := l.XTouches.findExecutor(i + pos)
+			button, found := l.XTouches.Button(i + pos)
 			// If the executor has not been found in our xtouch configuration
 			if !found {
-				continue
-			}
-
-			// If we're on the XTouch we return 9 executor but there's only 8 buttons so skip this one
-			if offset == 8 {
 				continue
 			}
 
@@ -194,10 +183,8 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 			if executor.IsRun != 0 {
 				value = xtouch.ButtonStatusOn
 			}
-			err := xt.server.SetFaderButtonStatus(ctx, offset, xtouch.FaderButtonPositionRec, value)
-			if err != nil {
-				return errors.Wrap(err, "fail to change button status")
-			}
+
+			button.Set(value)
 		}
 		if executor.CombinedItems > 0 {
 			i += executor.CombinedItems - 1
@@ -213,7 +200,7 @@ func (l *Link) faderGmaToXtouch(ctx context.Context) error {
 		return nil
 	}
 
-	mainXtouch.SetAssignement(ctx, page+1)
+	mainXtouch.Assignment.Set(page + 1)
 	return nil
 }
 
@@ -232,6 +219,7 @@ func (l *Link) onFaderChangeEvent(ctx context.Context, executor int, position fl
 func (l *Link) FaderPageUp() {
 	l.faderLock.Lock()
 	defer l.faderLock.Unlock()
+	l.XTouches.ForceRefresh()
 	l.faderPage++
 }
 
@@ -239,6 +227,7 @@ func (l *Link) FaderPageDown() {
 	l.faderLock.Lock()
 	defer l.faderLock.Unlock()
 	l.faderPage--
+	l.XTouches.ForceRefresh()
 	if l.faderPage < 0 {
 		l.faderPage = 0
 	}

@@ -165,6 +165,8 @@ func (l *Link) updateButtons(ctx context.Context) error {
 		return nil
 	}
 
+	server := mainXtouch.Server
+
 	// If there is an xtouch connected, start fetching and setting those lighting attributes
 	l.encoderLock.RLock()
 	encoderAsAttributes := l.encoderAsAttributes
@@ -172,20 +174,20 @@ func (l *Link) updateButtons(ctx context.Context) error {
 
 	// Update our internal buttons lighting (prev page and encoder status, if there is a xtouch)
 	if encoderAsAttributes {
-		err := mainXtouch.SetButtonStatus(ctx, xtouch.ButtonChannelPrev, xtouch.ButtonStatusOff)
+		err := server.SetButtonStatus(ctx, xtouch.ButtonChannelPrev, xtouch.ButtonStatusOff)
 		if err != nil {
 			return errors.Wrap(err, "fail to set channel prev status")
 		}
-		err = mainXtouch.SetButtonStatus(ctx, xtouch.ButtonChannelNext, xtouch.ButtonStatusOn)
+		err = server.SetButtonStatus(ctx, xtouch.ButtonChannelNext, xtouch.ButtonStatusOn)
 		if err != nil {
 			return errors.Wrap(err, "fail to set channel next status")
 		}
 	} else {
-		err := mainXtouch.SetButtonStatus(ctx, xtouch.ButtonChannelPrev, xtouch.ButtonStatusOn)
+		err := server.SetButtonStatus(ctx, xtouch.ButtonChannelPrev, xtouch.ButtonStatusOn)
 		if err != nil {
 			return errors.Wrap(err, "fail to set channel prev status")
 		}
-		err = mainXtouch.SetButtonStatus(ctx, xtouch.ButtonChannelNext, xtouch.ButtonStatusOff)
+		err = server.SetButtonStatus(ctx, xtouch.ButtonChannelNext, xtouch.ButtonStatusOff)
 		if err != nil {
 			return errors.Wrap(err, "fail to set channel next status")
 		}
@@ -230,6 +232,8 @@ func (l *Link) setKeyStatus(ctx context.Context, key xtouch.Button, status gma2w
 		return nil
 	}
 
+	server := mainXtouch.Server
+
 	var bStatus xtouch.ButtonStatus = xtouch.ButtonStatusOff
 	if status == gma2ws.KeyStatusOn {
 		bStatus = xtouch.ButtonStatusOn
@@ -239,7 +243,7 @@ func (l *Link) setKeyStatus(ctx context.Context, key xtouch.Button, status gma2w
 	}
 
 	// Try to find which xtouch owns this encoder
-	err := mainXtouch.SetButtonStatus(ctx, key, bStatus)
+	err := server.SetButtonStatus(ctx, key, bStatus)
 	if err != nil {
 		return errors.Wrap(err, "fail to send button status")
 	}

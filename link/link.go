@@ -17,7 +17,7 @@ type Link struct {
 	XTouches               XTouches
 	GMA                    *gma2ws.Client
 	SACN                   sacn.Transmitter
-	sacnDMX                chan<- [512]byte
+	sacnDMX                chan<- []byte
 	sacnUniverse           uint16
 	dmxUniverse            [512]byte
 	dmxLock                *sync.Mutex
@@ -59,7 +59,7 @@ func New(params NewLinkParams) (*Link, error) {
 	}
 	link := &Link{
 		GMA:                    gma2,
-		XTouches:               make([]XTouch, 0),
+		XTouches:               make([]*XTouch, 0),
 		SACN:                   sacn,
 		sacnUniverse:           params.SACNUniverse,
 		dmxUniverse:            [512]byte{},
@@ -88,12 +88,8 @@ func (l *Link) AddXTouch(ctx context.Context, params XTouchParams) error {
 		}
 	}
 	server := xtouch.NewServer(params.Port, params.Type)
-	touch := XTouch{
-		server:         server,
-		xtouchType:     params.Type,
-		executorOffset: params.ExecutorOffset,
-		link:           l,
-	}
+
+	touch := NewXTouch(server, params.Type, params.ExecutorOffset, l)
 
 	l.XTouches = append(l.XTouches, touch)
 	touch.subscribeToEventChanges()
@@ -122,7 +118,7 @@ func (l *Link) Start(ctx context.Context) error {
 	l.gmaStop = stop
 
 	for _, xt := range l.XTouches {
-		err = xt.server.Start(ctx)
+		err = xt.Server.Start(ctx)
 		if err != nil {
 			close(dmx)
 			stop()
@@ -142,7 +138,7 @@ func (l *Link) Start(ctx context.Context) error {
 func (l *Link) stopAllXTouches(ctx context.Context) {
 	log := logger.Get(ctx)
 	for _, xt := range l.XTouches {
-		err := xt.server.Stop(ctx)
+		err := xt.Server.Stop(ctx)
 		if err != nil {
 			log.WithError(err).Error("fail to stop xtouch")
 		}

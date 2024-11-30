@@ -33,5 +33,8 @@ func (l *Link) startEventLoop(ctx context.Context) {
 			log.WithError(err).Error("fail to update encoder rings")
 		}
 
+		for _, xtouch := range l.XTouches {
+			xtouch.RunRefreshers(ctx)
+		}
 	}
 }
