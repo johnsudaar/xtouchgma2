@@ -19,7 +19,10 @@
 package truetype
 
 import (
+	"bytes"
 	"fmt"
+	"unicode/utf16"
+	"unicode/utf8"
 
 	"golang.org/x/image/math/fixed"
 )
@@ -134,7 +137,7 @@ func parseSubtables(table []byte, name string, offset, size int, pred func([]byt
 	if len(table) < size*nSubtables+offset {
 		return 0, 0, FormatError(name + " too short")
 	}
-	ok := false
+	bestScore := -1
 	for i := 0; i < nSubtables; i, offset = i+1, offset+size {
 		if pred != nil && !pred(table[offset:]) {
 			continue
@@ -144,19 +147,24 @@ func parseSubtables(table []byte, name string, offset, size int, pred func([]byt
 		pidPsid := u32(table, offset)
 		// We prefer the Unicode cmap encoding. Failing to find that, we fall
 		// back onto the Microsoft cmap encoding.
+		// And we prefer full/UCS4 encoding over BMP/UCS2. So the priority goes:
+		//    unicodeEncodingFull > microsoftUCS4Encoding > unicodeEncodingBMPOnly > microsoftUCS2Encoding > microsoftSymbolEncoding
+		// It is in accord with the Psid part.
+		score := int(pidPsid & 0xFFFF)
+		if score <= bestScore {
+			continue
+		}
 		if pidPsid == unicodeEncodingBMPOnly || pidPsid == unicodeEncodingFull {
-			bestOffset, bestPID, ok = offset, pidPsid>>16, true
+			bestOffset, bestPID, bestScore = offset, pidPsid>>16, score
 			break
 
 		} else if pidPsid == microsoftSymbolEncoding ||
 			pidPsid == microsoftUCS2Encoding ||
 			pidPsid == microsoftUCS4Encoding {
-
-			bestOffset, bestPID, ok = offset, pidPsid>>16, true
-			// We don't break out of the for loop, so that Unicode can override Microsoft.
+			bestOffset, bestPID, bestScore = offset, pidPsid>>16, score
 		}
 	}
-	if !ok {
+	if bestScore < 0 {
 		return 0, 0, UnsupportedError(name + " encoding")
 	}
 	return bestOffset, bestPID, nil
@@ -189,6 +197,8 @@ type Font struct {
 	ascent                  int32               // In FUnits.
 	descent                 int32               // In FUnits; typically negative.
 	lineGap                 int32               // In FUnits.
+	xHeight                 int32               // In FUnits.
+	capHeight               int32               // In FUnits.
 	bounds                  fixed.Rectangle26_6 // In FUnits.
 	// Values from the maxp section.
 	maxTwilightPoints, maxStorage, maxFunctionDefs, maxStackElements uint16
@@ -371,6 +381,15 @@ func (f *Font) parseMaxp() error {
 	return nil
 }
 
+func (f *Font) parseOS2() error {
+	if len(f.os2) < 90 {
+		return nil
+	}
+	f.xHeight = int32(int16(u16(f.os2, 86)))
+	f.capHeight = int32(int16(u16(f.os2, 88)))
+	return nil
+}
+
 // scale returns x divided by f.fUnitsPerEm, rounded to the nearest integer.
 func (f *Font) scale(x fixed.Int26_6) fixed.Int26_6 {
 	if x >= 0 {
@@ -429,20 +448,27 @@ func (f *Font) Name(id NameID) string {
 	// Return the ASCII value of the encoded string.
 	// The string is encoded as UTF-16 on non-Apple platformIDs; Apple is platformID 1.
 	src := f.name[offset : offset+length]
-	var dst []byte
 	if platformID != 1 { // UTF-16.
 		if len(src)&1 != 0 {
 			return ""
 		}
-		dst = make([]byte, len(src)/2)
-		for i := range dst {
-			dst[i] = printable(u16(src, 2*i))
+		lb := len(src) / 2
+		b8buf := make([]byte, 4)
+		u16s := make([]uint16, 1)
+		var buf bytes.Buffer
+		for i := 0; i < lb; i++ {
+			u16s[0] = u16(src, i*2)
+			r := utf16.Decode(u16s)
+			n := utf8.EncodeRune(b8buf, r[0])
+			buf.Write([]byte(string(b8buf[:n])))
 		}
-	} else { // ASCII.
-		dst = make([]byte, len(src))
-		for i, c := range src {
-			dst[i] = printable(uint16(c))
-		}
+		return buf.String()
+	}
+	// ASCII.
+	var dst []byte
+	dst = make([]byte, len(src))
+	for i, c := range src {
+		dst[i] = printable(uint16(c))
 	}
 	return string(dst)
 }
@@ -654,6 +680,9 @@ func parse(ttf []byte, offset int) (font *Font, err error) {
 		return
 	}
 	if err = f.parseHhea(); err != nil {
+		return
+	}
+	if err = f.parseOS2(); err != nil {
 		return
 	}
 	font = f

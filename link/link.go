@@ -3,6 +3,7 @@ package link
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/Hundemeier/go-sacn/sacn"
 	"github.com/Scalingo/go-utils/logger"
@@ -17,7 +18,7 @@ type Link struct {
 	XTouches               XTouches
 	GMA                    *gma2ws.Client
 	SACN                   sacn.Transmitter
-	sacnDMX                chan<- [512]byte
+	sacnDMX                chan<- []byte
 	sacnUniverse           uint16
 	dmxUniverse            [512]byte
 	dmxLock                *sync.Mutex
@@ -32,6 +33,9 @@ type Link struct {
 	encoderAsAttributes    bool
 	encoderGMAValue        map[int]float64
 	encoderLock            *sync.RWMutex
+
+	eventLoopRefreshRate time.Duration
+	refreshParams        RefreshParams
 }
 
 type XTouchParams struct {
@@ -45,6 +49,11 @@ type NewLinkParams struct {
 	GMAUser      string
 	GMAPassword  string
 	SACNUniverse uint16
+
+	EventLoopRefreshRate time.Duration
+	InputInhibitTime     time.Duration
+	XTouchMinRefreshRate time.Duration
+	XTouchMaxRefreshRate time.Duration
 }
 
 func New(params NewLinkParams) (*Link, error) {
@@ -59,7 +68,7 @@ func New(params NewLinkParams) (*Link, error) {
 	}
 	link := &Link{
 		GMA:                    gma2,
-		XTouches:               make([]XTouch, 0),
+		XTouches:               make([]*XTouch, 0),
 		SACN:                   sacn,
 		sacnUniverse:           params.SACNUniverse,
 		dmxUniverse:            [512]byte{},
@@ -74,6 +83,13 @@ func New(params NewLinkParams) (*Link, error) {
 		encoderAsAttributes:    false,
 		encoderGMAValue:        make(map[int]float64),
 		encoderLock:            &sync.RWMutex{},
+
+		eventLoopRefreshRate: params.EventLoopRefreshRate,
+		refreshParams: RefreshParams{
+			InhibitTime:        params.InputInhibitTime,
+			MinRefreshInterval: params.XTouchMinRefreshRate,
+			MaxRefreshInterval: params.XTouchMaxRefreshRate,
+		},
 	}
 
 	return link, nil
@@ -88,12 +104,8 @@ func (l *Link) AddXTouch(ctx context.Context, params XTouchParams) error {
 		}
 	}
 	server := xtouch.NewServer(params.Port, params.Type)
-	touch := XTouch{
-		server:         server,
-		xtouchType:     params.Type,
-		executorOffset: params.ExecutorOffset,
-		link:           l,
-	}
+
+	touch := NewXTouch(server, params.Type, params.ExecutorOffset, l, l.refreshParams)
 
 	l.XTouches = append(l.XTouches, touch)
 	touch.subscribeToEventChanges()
@@ -122,7 +134,7 @@ func (l *Link) Start(ctx context.Context) error {
 	l.gmaStop = stop
 
 	for _, xt := range l.XTouches {
-		err = xt.server.Start(ctx)
+		err = xt.Server.Start(ctx)
 		if err != nil {
 			close(dmx)
 			stop()
@@ -142,7 +154,7 @@ func (l *Link) Start(ctx context.Context) error {
 func (l *Link) stopAllXTouches(ctx context.Context) {
 	log := logger.Get(ctx)
 	for _, xt := range l.XTouches {
-		err := xt.server.Stop(ctx)
+		err := xt.Server.Stop(ctx)
 		if err != nil {
 			log.WithError(err).Error("fail to stop xtouch")
 		}

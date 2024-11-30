@@ -14,6 +14,7 @@ import (
 type GUI struct {
 	configurationTab *ConfigurationTab
 	encoderTab       *EncoderTab
+	settingsTab      *SettingsTab
 	app              fyne.App
 	window           fyne.Window
 	link             *link.Link
@@ -26,6 +27,7 @@ func New() *GUI {
 	}
 	gui.encoderTab = NewEncoderTab(gui)
 	gui.configurationTab = NewConfigurationTab(gui)
+	gui.settingsTab = NewSettingsTag(gui)
 
 	gui.app = app.New()
 	gui.window = gui.app.NewWindow("XTouch2GMA")
@@ -54,6 +56,7 @@ func (g *GUI) buildApp(ctx context.Context) {
 		container.NewAppTabs(
 			g.configurationTab.getTabItem(),
 			g.encoderTab.getTabItem(),
+			g.settingsTab.getTabItem(),
 		),
 	)
 

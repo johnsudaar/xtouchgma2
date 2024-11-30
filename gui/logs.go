@@ -16,8 +16,8 @@ func (g *GUI) Levels() []logrus.Level {
 		logrus.ErrorLevel,
 		logrus.WarnLevel,
 		logrus.InfoLevel,
+		logrus.DebugLevel,
 	}
-	// TODO: debug opts
 
 	return levels
 }
@@ -26,6 +26,11 @@ func (g *GUI) Fire(entry *logrus.Entry) error {
 	if entry == nil {
 		return nil
 	}
+
+	if entry.Level == logrus.DebugLevel && !g.settingsTab.debugEnabled.Checked {
+		return nil
+	}
+
 	formater := logrus.TextFormatter{DisableColors: true}
 	formatted, err := formater.Format(entry)
 	if err != nil {

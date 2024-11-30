@@ -18,7 +18,10 @@ func (l *Link) startEventLoop(ctx context.Context) {
 			log.Info("Stop main event loop")
 			return
 		}
-		time.Sleep(100 * time.Millisecond)
+
+		log.Debug("Running event loop")
+		time.Sleep(l.eventLoopRefreshRate)
+
 		err := l.faderGmaToXtouch(ctx)
 		if err != nil {
 			log.WithError(err).Error("fail to sync faders")
@@ -33,5 +36,8 @@ func (l *Link) startEventLoop(ctx context.Context) {
 			log.WithError(err).Error("fail to update encoder rings")
 		}
 
+		for _, xtouch := range l.XTouches {
+			xtouch.RunRefreshers(ctx)
+		}
 	}
 }

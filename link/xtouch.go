@@ -12,15 +12,139 @@ const (
 	ButtonsStartOffset       = 100
 )
 
+type ScribbleValue struct {
+	Color              xtouch.ScribbleColor
+	SecondLineInverted bool
+	Line1              string
+	Line2              string
+}
+
 type XTouch struct {
-	server         *xtouch.Server
+	Server         *xtouch.Server
 	xtouchType     xtouch.ServerType
 	executorOffset int
 	link           *Link
+	Faders         []XTouchFader
+	Buttons        []*Refresher[xtouch.ButtonStatus]
+	RotaryEncoder  []*Refresher[float64]
+	Assignment     *Refresher[int]
+}
+
+type XTouches []*XTouch
+
+type XTouchFader struct {
+	Fader    *Refresher[float64]
+	Scribble *Refresher[ScribbleValue]
+	ButtonA  *Refresher[xtouch.ButtonStatus]
+	ButtonB  *Refresher[xtouch.ButtonStatus]
+	ButtonC  *Refresher[xtouch.ButtonStatus]
+}
+
+func NewXTouch(server *xtouch.Server, xtouchType xtouch.ServerType, executorOffset int, link *Link, params RefreshParams) *XTouch {
+	xt := XTouch{
+		Server:         server,
+		xtouchType:     xtouchType,
+		executorOffset: executorOffset,
+		link:           link,
+	}
+
+	xt.Faders = make([]XTouchFader, xt.size())
+	for i := 0; i < xt.size(); i++ {
+		fader := XTouchFader{
+			Fader:   NewRefresher("fader", params, xt.faderRefreshFunc(i)),
+			ButtonA: NewRefresher("button_select", params, xt.buttonRefreshFunc(i, xtouch.FaderButtonPositionSelect)),
+		}
+
+		if i != 8 { // The main fader doesn't have a button
+			fader.Scribble = NewRefresher("scribble", params, xt.scribbleRefreshFunc(i))
+			fader.ButtonB = NewRefresher("button_mute", params, xt.buttonRefreshFunc(i, xtouch.FaderButtonPositionMute))
+			fader.ButtonC = NewRefresher("button_solo", params, xt.buttonRefreshFunc(i, xtouch.FaderButtonPositionSolo))
+		}
+		xt.Faders[i] = fader
+	}
+
+	xt.Buttons = make([]*Refresher[xtouch.ButtonStatus], 8)
+	xt.RotaryEncoder = make([]*Refresher[float64], 8)
+	for i := 0; i < 8; i++ {
+		xt.Buttons[i] = NewRefresher("button", params, xt.buttonRefreshFunc(i, xtouch.FaderButtonPositionRec))
+		xt.RotaryEncoder[i] = NewRefresher("rotary_encoder", params, xt.rotaryRingRefreshFunc(i))
+	}
+
+	if xtouchType == xtouch.ServerTypeXTouch {
+		xt.Assignment = NewRefresher("assignment", params, func(ctx context.Context, value int) error {
+			return xt.Server.SetAssignement(ctx, value)
+		})
+	}
+
+	return &xt
+}
+
+func (x *XTouch) faderRefreshFunc(i int) func(context.Context, float64) error {
+	return func(ctx context.Context, value float64) error {
+		return x.Server.SetFaderPos(ctx, i, value)
+	}
+}
+
+func (x *XTouch) buttonRefreshFunc(i int, button xtouch.FaderButtonPosition) func(context.Context, xtouch.ButtonStatus) error {
+	return func(ctx context.Context, value xtouch.ButtonStatus) error {
+		return x.Server.SetFaderButtonStatus(ctx, i, button, value)
+	}
+}
+
+func (x *XTouch) scribbleRefreshFunc(i int) func(context.Context, ScribbleValue) error {
+	return func(ctx context.Context, value ScribbleValue) error {
+		return x.Server.SetScribble(ctx, i, value.Color, value.SecondLineInverted, value.Line1, value.Line2)
+	}
+}
+
+func (x *XTouch) rotaryRingRefreshFunc(i int) func(context.Context, float64) error {
+	return func(ctx context.Context, value float64) error {
+		return x.Server.SetRingPosition(ctx, i, value)
+	}
+}
+
+func (x *XTouch) RunRefreshers(ctx context.Context) {
+	for _, fader := range x.Faders {
+		fader.Fader.Refresh(ctx)
+		fader.ButtonA.Refresh(ctx)
+		if fader.Scribble != nil {
+			fader.Scribble.Refresh(ctx)
+			fader.ButtonB.Refresh(ctx)
+			fader.ButtonC.Refresh(ctx)
+		}
+	}
+	for i := 0; i < 8; i++ {
+		x.Buttons[i].Refresh(ctx)
+		x.RotaryEncoder[i].Refresh(ctx)
+	}
+
+	if x.Assignment != nil {
+		x.Assignment.Refresh(ctx)
+	}
+}
+
+func (x *XTouch) ForceRefresh() {
+	for _, fader := range x.Faders {
+		fader.Fader.ForceRefresh()
+		fader.ButtonA.ForceRefresh()
+		if fader.Scribble != nil {
+			fader.Scribble.ForceRefresh()
+			fader.ButtonB.ForceRefresh()
+			fader.ButtonC.ForceRefresh()
+		}
+	}
+	for i := 0; i < 8; i++ {
+		x.Buttons[i].ForceRefresh()
+		x.RotaryEncoder[i].ForceRefresh()
+	}
+
+	if x.Assignment != nil {
+		x.Assignment.ForceRefresh()
+	}
 }
 
 // How many executor is there on this device ?
-func (x XTouch) size() int {
+func (x *XTouch) size() int {
 	if x.xtouchType == xtouch.ServerTypeXTouch {
 		return 9
 	}
@@ -28,17 +152,20 @@ func (x XTouch) size() int {
 }
 
 func (x XTouch) subscribeToEventChanges() {
-	x.server.SubscribeToFaderChanges(x.onFaderChange)
-	x.server.SubscribeButtonChanges(x.onButtonChange)
-	x.server.SubscribeEncoderChanges(x.onEncoderChange)
+	x.Server.SubscribeToFaderChanges(x.onFaderChange)
+	x.Server.SubscribeButtonChanges(x.onButtonChange)
+	x.Server.SubscribeEncoderChanges(x.onEncoderChange)
 }
 
-func (x XTouch) onFaderChange(ctx context.Context, e xtouch.FaderChangedEvent) {
+func (x *XTouch) onFaderChange(ctx context.Context, e xtouch.FaderChangedEvent) {
+	// Inhibit the button
+	x.Faders[e.Fader].Fader.Inhibit()
+
 	executor := FadersStartOffset + e.Fader + x.executorOffset
 	x.link.onFaderChangeEvent(ctx, executor, e.Position())
 }
 
-func (x XTouch) onButtonChange(ctx context.Context, e xtouch.ButtonChangedEvent) {
+func (x *XTouch) onButtonChange(ctx context.Context, e xtouch.ButtonChangedEvent) {
 	// Translate the executor offset to the global GMA offset
 	executor := ButtonsStartOffset + e.Executor + x.executorOffset
 	// If we pressed a button linked to a fader
@@ -60,18 +187,16 @@ func (x XTouch) onButtonChange(ctx context.Context, e xtouch.ButtonChangedEvent)
 	x.link.onButtonChange(ctx, e, executor, x.xtouchType)
 }
 
-func (x XTouch) onEncoderChange(ctx context.Context, e xtouch.EncoderChangedEvent) {
+func (x *XTouch) onEncoderChange(ctx context.Context, e xtouch.EncoderChangedEvent) {
 	encoder := RotaryEncoderStartOffset + int(e.Encoder) + x.executorOffset
 	x.link.onEncoderChangedEvent(ctx, e, x.xtouchType, encoder)
 }
 
-type XTouches []XTouch
-
 // Return the main XTouch if there's one, nil istead
-func (x XTouches) XTouch() *xtouch.Server {
+func (x XTouches) XTouch() *XTouch {
 	for _, xt := range x {
 		if xt.xtouchType == xtouch.ServerTypeXTouch {
-			return xt.server
+			return xt
 		}
 	}
 	return nil
@@ -108,11 +233,35 @@ func (x XTouches) executorEndOffset() int {
 	return max
 }
 
-func (x XTouches) findExecutor(offset int) (bool, XTouch, int) {
+func (x XTouches) findFader(offset int) (XTouchFader, bool) {
 	for _, xt := range x {
 		if offset >= xt.executorOffset && offset < xt.executorOffset+xt.size() {
-			return true, xt, offset - xt.executorOffset
+			return xt.Faders[offset-xt.executorOffset], true
 		}
 	}
-	return false, XTouch{}, 0
+	return XTouchFader{}, false
+}
+
+func (x XTouches) RotaryEncoder(offset int) (*Refresher[float64], *XTouch, bool) {
+	for _, xt := range x {
+		if offset >= xt.executorOffset && offset < xt.executorOffset+8 {
+			return xt.RotaryEncoder[offset-xt.executorOffset], xt, true
+		}
+	}
+	return nil, nil, false
+}
+
+func (x XTouches) Button(offset int) (*Refresher[xtouch.ButtonStatus], bool) {
+	for _, xt := range x {
+		if offset >= xt.executorOffset && offset < xt.executorOffset+8 {
+			return xt.Buttons[offset-xt.executorOffset], true
+		}
+	}
+	return nil, false
+}
+
+func (x XTouches) ForceRefresh() {
+	for _, xt := range x {
+		xt.ForceRefresh()
+	}
 }

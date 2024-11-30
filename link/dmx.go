@@ -20,7 +20,7 @@ func (l *Link) startDMXSync(ctx context.Context) {
 	log.Info("Start DMX Sync")
 	for {
 		time.Sleep(50 * time.Millisecond)
-		var universe [512]byte
+		universe := make([]byte, 512)
 		l.dmxLock.Lock()
 		for i, v := range l.dmxUniverse {
 			universe[i] = v

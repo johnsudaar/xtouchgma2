@@ -63,9 +63,9 @@ func (l *Link) updateEncoderRings(ctx context.Context) error {
 	// Set the 8 encoder values
 	for i := 0; i < 8; i++ {
 		if encoderAttributes[i] == "" {
-			mainXtouch.SetRingPosition(ctx, i, 0)
+			mainXtouch.RotaryEncoder[i].Set(0)
 		} else {
-			mainXtouch.SetRingPosition(ctx, i, encodersCoeff[encoderAttributesCoeff[i]]/encodersCoeffMax)
+			mainXtouch.RotaryEncoder[i].Set(encodersCoeff[encoderAttributesCoeff[i]] / encodersCoeffMax)
 		}
 	}
 	return nil
@@ -110,6 +110,14 @@ func (l *Link) updateEncoderFader(ctx context.Context, e xtouch.EncoderChangedEv
 	l.encoderLock.Lock()
 	value := l.encoderGMAValue[offset]
 	value += float64(e.Delta) * 0.01
+
+	if value < 0 {
+		value = 0
+	}
+	if value > 1 {
+		value = 1
+	}
+
 	l.encoderGMAValue[offset] = value
 	defer l.encoderLock.Unlock()
 
